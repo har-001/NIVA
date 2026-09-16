@@ -1,0 +1,12 @@
+{
+  "name": "niva-desktop",
+  "version": "1.0.0",
+  "description": "NIVA — Neural Intelligent Virtual Assistant Native Laptop Application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^34.5.8"
+  }
+}

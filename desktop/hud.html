@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIVA — Jarvis Desktop Core</title>
+  <link rel="stylesheet" href="hud.css">
+</head>
+<body>
+  <div class="hudContainer" id="hudContainer">
+    <!-- Top Bar -->
+    <div class="topBar">
+      <div class="brandPill">
+        <div class="pulseDot"></div>
+        <span>NIVA CORE</span>
+      </div>
+      <div class="windowControls noDrag">
+        <button class="miniBtn" id="btnExpand" title="Open Full Web Command Center">⛶</button>
+        <button class="miniBtn" id="btnMinimize" title="Hide to Tray">−</button>
+      </div>
+    </div>
+
+    <!-- Holographic Arc Reactor Core -->
+    <div class="coreWrapper noDrag" id="coreTrigger" title="Click or say 'Hey NIVA' to speak">
+      <div class="arcRing3"></div>
+      <div class="arcRing2"></div>
+      <div class="arcRing1"></div>
+      <div class="coreSphere" id="coreSphere">N</div>
+    </div>
+
+    <!-- Live Telemetry Grid -->
+    <div class="telemetryGrid">
+      <div class="telemetryItem">
+        <span class="statLabel">CPU</span>
+        <span class="statVal" id="cpuVal">AMD 16c</span>
+      </div>
+      <div class="telemetryItem">
+        <span class="statLabel">RAM</span>
+        <span class="statVal" id="ramVal">15.8 GB</span>
+      </div>
+      <div class="telemetryItem">
+        <span class="statLabel">BATTERY</span>
+        <span class="statVal" id="batVal">51%</span>
+      </div>
+    </div>
+
+    <!-- Speech & Status Output -->
+    <div class="statusOutput" id="statusOutput">Tap Core or say "Hey NIVA"</div>
+
+    <!-- Quick Laptop Actions Bar -->
+    <div class="quickActions noDrag">
+      <button class="actionPill" id="btnNotepad">📝 Notepad</button>
+      <button class="actionPill" id="btnCalc">🧮 Calc</button>
+      <button class="actionPill" id="btnChrome">🌐 Web</button>
+      <button class="actionPill" id="btnCenter">💻 App</button>
+    </div>
+
+    <!-- Startup Settings Toggle -->
+    <div class="startupToggle noDrag">
+      <span>Windows Boot Auto-Start</span>
+      <span class="toggleSwitch" id="startupToggleBtn">DISABLED [OFF]</span>
+    </div>
+  </div>
+
+  <script src="hud.js"></script>
+</body>
+</html>

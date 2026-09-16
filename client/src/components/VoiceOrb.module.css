@@ -1,0 +1,213 @@
+.orbContainer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: radial-gradient(circle at center, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(59, 130, 246, 0.1);
+  backdrop-filter: blur(12px);
+  margin-bottom: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.orbWrapper {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Core Orb Sphere */
+.orbCore {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #60a5fa, #3b82f6 40%, #1d4ed8 75%, #0f172a 100%);
+  box-shadow: 0 0 35px rgba(59, 130, 246, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.5);
+  transition: all 0.4s ease;
+  z-index: 2;
+}
+
+/* Atmospheric Outer Rings */
+.ring1, .ring2, .ring3 {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(96, 165, 250, 0.4);
+  pointer-events: none;
+}
+
+.ring1 {
+  width: 90px;
+  height: 90px;
+  animation: rotateRing 10s linear infinite;
+  border-top-color: #38bdf8;
+  border-bottom-color: #818cf8;
+}
+
+.ring2 {
+  width: 110px;
+  height: 110px;
+  animation: rotateRingRev 14s linear infinite;
+  border-left-color: #c084fc;
+  border-right-color: #3b82f6;
+  opacity: 0.7;
+}
+
+.ring3 {
+  width: 130px;
+  height: 130px;
+  animation: pulseOuter 3s ease-in-out infinite;
+  border-color: rgba(56, 189, 248, 0.2);
+}
+
+/* State-specific Orb Styling */
+.stateListening .orbCore {
+  background: radial-gradient(circle at 35% 35%, #f43f5e, #e11d48 40%, #9f1239 75%, #1e1b4b 100%);
+  box-shadow: 0 0 45px rgba(244, 63, 94, 0.8), inset 0 0 20px rgba(255, 255, 255, 0.6);
+  transform: scale(1.1);
+  animation: listeningPulse 1.2s ease-in-out infinite alternate;
+}
+
+.stateListening .ring1 {
+  border-color: rgba(244, 63, 94, 0.6);
+  animation: rotateRing 4s linear infinite;
+}
+
+.stateThinking .orbCore {
+  background: radial-gradient(circle at 35% 35%, #a855f7, #7c3aed 40%, #581c87 75%, #0f172a 100%);
+  box-shadow: 0 0 45px rgba(168, 85, 247, 0.8);
+  animation: thinkingSpin 2s linear infinite;
+}
+
+.stateSpeaking .orbCore {
+  background: radial-gradient(circle at 35% 35%, #34d399, #10b981 40%, #047857 75%, #064e3b 100%);
+  box-shadow: 0 0 45px rgba(52, 211, 153, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.5);
+  animation: speakingWave 0.8s ease-in-out infinite alternate;
+}
+
+/* Waveform Visualizer */
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin-top: 1rem;
+}
+
+.waveBar {
+  width: 3.5px;
+  background: #60a5fa;
+  border-radius: 4px;
+  transition: height 0.15s ease;
+  height: 6px;
+}
+
+.stateListening .waveBar {
+  background: #fb7185;
+  animation: waveDance 0.6s ease-in-out infinite alternate;
+}
+
+.stateSpeaking .waveBar {
+  background: #34d399;
+  animation: waveDance 0.5s ease-in-out infinite alternate;
+}
+
+.waveBar:nth-child(2) { animation-delay: 0.1s; }
+.waveBar:nth-child(3) { animation-delay: 0.2s; }
+.waveBar:nth-child(4) { animation-delay: 0.3s; }
+.waveBar:nth-child(5) { animation-delay: 0.4s; }
+.waveBar:nth-child(6) { animation-delay: 0.25s; }
+.waveBar:nth-child(7) { animation-delay: 0.15s; }
+
+/* Status Text & Controls */
+.statusLabel {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.transcriptPreview {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  max-width: 480px;
+  text-align: center;
+  font-style: italic;
+  min-height: 1.4rem;
+}
+
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.85rem;
+}
+
+.controlBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.controlBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.activeModeBtn {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+/* Animations */
+@keyframes rotateRing {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes rotateRingRev {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes pulseOuter {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.08); opacity: 0.6; }
+}
+
+@keyframes listeningPulse {
+  from { transform: scale(1.05); }
+  to { transform: scale(1.18); }
+}
+
+@keyframes speakingWave {
+  from { transform: scale(0.98); }
+  to { transform: scale(1.12); }
+}
+
+@keyframes waveDance {
+  from { height: 6px; }
+  to { height: 24px; }
+}
