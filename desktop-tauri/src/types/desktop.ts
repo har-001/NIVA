@@ -55,3 +55,16 @@ export interface AuthSession {
   } | null;
   paired: boolean;
 }
+
+export type SystemPowerAction = 'lock' | 'restart' | 'shutdown';
+
+export interface NotificationPayload {
+  title: string;
+  body: string;
+}
+
+export interface SafeFileResult {
+  success: boolean;
+  content?: string;
+  error?: string | null;
+}

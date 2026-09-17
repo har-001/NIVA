@@ -166,6 +166,168 @@ fn toggle_main_window(app: AppHandle) -> bool {
     false
 }
 
+// 5. Native Safe System Control & Power Management (Gated)
+#[tauri::command]
+fn lock_workstation() -> CommandResult {
+    let mut cmd = std::process::Command::new("rundll32.exe");
+    cmd.args(["user32.dll,LockWorkStation"]);
+    match cmd.spawn() {
+        Ok(_) => CommandResult {
+            success: true,
+            output: "Workstation locked securely.".into(),
+            error: None,
+        },
+        Err(e) => CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("Failed to lock workstation: {}", e)),
+        },
+    }
+}
+
+#[tauri::command]
+fn restart_pc(confirmed: bool) -> CommandResult {
+    if !confirmed {
+        return CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some("Restart aborted: Explicit confirmation required.".into()),
+        };
+    }
+    let mut cmd = std::process::Command::new("shutdown.exe");
+    cmd.args(["/r", "/t", "5", "/c", "NIVA System Restart initiated by user"]);
+    match cmd.spawn() {
+        Ok(_) => CommandResult {
+            success: true,
+            output: "System restart scheduled in 5 seconds.".into(),
+            error: None,
+        },
+        Err(e) => CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("Failed to initiate restart: {}", e)),
+        },
+    }
+}
+
+#[tauri::command]
+fn shutdown_pc(confirmed: bool) -> CommandResult {
+    if !confirmed {
+        return CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some("Shutdown aborted: Explicit confirmation required.".into()),
+        };
+    }
+    let mut cmd = std::process::Command::new("shutdown.exe");
+    cmd.args(["/s", "/t", "5", "/c", "NIVA System Shutdown initiated by user"]);
+    match cmd.spawn() {
+        Ok(_) => CommandResult {
+            success: true,
+            output: "System shutdown scheduled in 5 seconds.".into(),
+            error: None,
+        },
+        Err(e) => CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("Failed to initiate shutdown: {}", e)),
+        },
+    }
+}
+
+#[tauri::command]
+fn cancel_power_action() -> CommandResult {
+    let mut cmd = std::process::Command::new("shutdown.exe");
+    cmd.args(["/a"]);
+    match cmd.spawn() {
+        Ok(_) => CommandResult {
+            success: true,
+            output: "Pending power action cancelled.".into(),
+            error: None,
+        },
+        Err(e) => CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("Failed to cancel power action: {}", e)),
+        },
+    }
+}
+
+// 6. Native Desktop Notification
+#[tauri::command]
+fn show_native_notification(title: String, body: String) -> CommandResult {
+    let safe_title = title.replace('"', "'");
+    let safe_body = body.replace('"', "'");
+    let ps_script = format!(
+        "[void] [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); \
+         $notify = New-Object System.Windows.Forms.NotifyIcon; \
+         $notify.Icon = [System.Drawing.SystemIcons]::Information; \
+         $notify.BalloonTipTitle = \"{}\"; \
+         $notify.BalloonTipText = \"{}\"; \
+         $notify.Visible = $True; \
+         $notify.ShowBalloonTip(4000);",
+        safe_title, safe_body
+    );
+    let mut cmd = std::process::Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps_script]);
+    match cmd.spawn() {
+        Ok(_) => CommandResult {
+            success: true,
+            output: format!("Notification shown: {}", safe_title),
+            error: None,
+        },
+        Err(e) => CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("Notification failed: {}", e)),
+        },
+    }
+}
+
+// 7. Bounded Safe File Reader (Read up to 64KB)
+#[tauri::command]
+fn read_desktop_file(file_path: String) -> CommandResult {
+    let path = std::path::Path::new(&file_path);
+    if !path.exists() {
+        return CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("File '{}' does not exist.", file_path)),
+        };
+    }
+    match std::fs::metadata(path) {
+        Ok(meta) => {
+            if meta.len() > 65536 {
+                return CommandResult {
+                    success: false,
+                    output: String::new(),
+                    error: Some(format!("File too large ({} bytes). Maximum allowed size is 64KB.", meta.len())),
+                };
+            }
+        }
+        Err(e) => {
+            return CommandResult {
+                success: false,
+                output: String::new(),
+                error: Some(format!("Cannot inspect file metadata: {}", e)),
+            };
+        }
+    }
+
+    match std::fs::read_to_string(path) {
+        Ok(content) => CommandResult {
+            success: true,
+            output: content,
+            error: None,
+        },
+        Err(e) => CommandResult {
+            success: false,
+            output: String::new(),
+            error: Some(format!("Failed to read file: {}", e)),
+        },
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -174,7 +336,13 @@ fn main() {
             get_telemetry,
             launch_allowed_app,
             toggle_hud,
-            toggle_main_window
+            toggle_main_window,
+            lock_workstation,
+            restart_pc,
+            shutdown_pc,
+            cancel_power_action,
+            show_native_notification,
+            read_desktop_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running NIVA Tauri application");

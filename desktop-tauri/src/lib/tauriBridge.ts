@@ -69,6 +69,77 @@ function mockInvoke<T>(command: string, args: Record<string, unknown>): T {
     case 'toggle_main_window':
       return true as unknown as T;
 
+    case 'lock_workstation':
+      console.log('[TauriBridge:Mock] Simulating workstation lock');
+      return {
+        success: true,
+        output: 'Workstation locked securely (Simulation).',
+        error: null,
+      } as unknown as T;
+
+    case 'restart_pc': {
+      const confirmed = Boolean(args.confirmed);
+      if (!confirmed) {
+        return {
+          success: false,
+          output: '',
+          error: 'Restart aborted: Explicit confirmation required.',
+        } as unknown as T;
+      }
+      console.log('[TauriBridge:Mock] Simulating system restart with confirmation');
+      return {
+        success: true,
+        output: 'System restart scheduled in 5 seconds (Simulation).',
+        error: null,
+      } as unknown as T;
+    }
+
+    case 'shutdown_pc': {
+      const confirmed = Boolean(args.confirmed);
+      if (!confirmed) {
+        return {
+          success: false,
+          output: '',
+          error: 'Shutdown aborted: Explicit confirmation required.',
+        } as unknown as T;
+      }
+      console.log('[TauriBridge:Mock] Simulating system shutdown with confirmation');
+      return {
+        success: true,
+        output: 'System shutdown scheduled in 5 seconds (Simulation).',
+        error: null,
+      } as unknown as T;
+    }
+
+    case 'cancel_power_action':
+      console.log('[TauriBridge:Mock] Simulating power action cancellation');
+      return {
+        success: true,
+        output: 'Pending power action cancelled (Simulation).',
+        error: null,
+      } as unknown as T;
+
+    case 'show_native_notification': {
+      const title = String(args.title || 'NIVA Alert');
+      const body = String(args.body || '');
+      console.log(`[TauriBridge:Mock] Notification shown: [${title}] ${body}`);
+      return {
+        success: true,
+        output: `Notification shown: ${title}`,
+        error: null,
+      } as unknown as T;
+    }
+
+    case 'read_desktop_file': {
+      const filePath = String(args.filePath || '');
+      console.log(`[TauriBridge:Mock] Reading desktop file: ${filePath}`);
+      return {
+        success: true,
+        output: `[SIMULATED FILE CONTENT for ${filePath}]`,
+        error: null,
+      } as unknown as T;
+    }
+
     default:
       throw new Error(`Unknown Tauri command: ${command}`);
   }
@@ -81,3 +152,19 @@ export const launchAllowedApp = (appName: AllowedApp) =>
   invokeCommand<CommandResult>('launch_allowed_app', { appName });
 export const toggleHUD = () => invokeCommand<boolean>('toggle_hud');
 export const toggleMainWindow = () => invokeCommand<boolean>('toggle_main_window');
+
+// Power Management Helpers
+export const lockWorkstation = () => invokeCommand<CommandResult>('lock_workstation');
+export const restartPC = (confirmed: boolean) =>
+  invokeCommand<CommandResult>('restart_pc', { confirmed });
+export const shutdownPC = (confirmed: boolean) =>
+  invokeCommand<CommandResult>('shutdown_pc', { confirmed });
+export const cancelPowerAction = () => invokeCommand<CommandResult>('cancel_power_action');
+
+// Native Notification Helper
+export const showNativeNotification = (title: string, body: string) =>
+  invokeCommand<CommandResult>('show_native_notification', { title, body });
+
+// Safe Desktop File Reader Helper
+export const readDesktopFile = (filePath: string) =>
+  invokeCommand<CommandResult>('read_desktop_file', { filePath });

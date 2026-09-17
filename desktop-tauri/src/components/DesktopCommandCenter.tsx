@@ -5,9 +5,15 @@ import {
   getDeviceIdentity,
   launchAllowedApp,
   toggleHUD,
+  lockWorkstation,
+  restartPC,
+  shutdownPC,
+  showNativeNotification,
 } from '../lib/tauriBridge';
 import { apiClient } from '../lib/apiClient';
 import { SystemTelemetry, DeviceIdentity, AllowedApp, ChatMessage } from '../types/desktop';
+import { DesktopVoiceOrb } from './DesktopVoiceOrb';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface DesktopCommandCenterProps {
   onSwitchToHUD: () => void;
@@ -29,11 +35,27 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
   const [inputVal, setInputVal] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [lastAssistantReply, setLastAssistantReply] = useState<string>('');
+  const [autoSpeak, setAutoSpeak] = useState<boolean>(true);
+
+  // Power action confirmation modal state
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    action: 'restart' | 'shutdown' | null;
+    title: string;
+    subtext?: string;
+    message: string;
+  }>({
+    isOpen: false,
+    action: null,
+    title: '',
+    message: '',
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Initial data fetch
+    // Initial hardware & server handshake
     const loadHardware = async () => {
       try {
         const id = await getDeviceIdentity();
@@ -67,13 +89,10 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!inputVal.trim() || isProcessing) return;
+  const handleSendCustomMessage = async (textToSend: string) => {
+    if (!textToSend.trim() || isProcessing) return;
 
-    const userText = inputVal.trim();
-    setInputVal('');
-
+    const userText = textToSend.trim();
     const newMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -83,7 +102,7 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
     setMessages((prev) => [...prev, newMsg]);
     setIsProcessing(true);
 
-    // Quick client-side check for native app launch
+    // Client-side shortcut for app launch keywords
     const lower = userText.toLowerCase();
     if (lower.includes('notepad')) {
       handleAppClick('notepad');
@@ -93,9 +112,15 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
       handleAppClick('chrome');
     } else if (lower.includes('code') || lower.includes('vscode')) {
       handleAppClick('vscode');
+    } else if (lower.includes('lock') && (lower.includes('screen') || lower.includes('laptop') || lower.includes('pc'))) {
+      handleLockWorkstation();
+    } else if (lower.includes('restart') && (lower.includes('pc') || lower.includes('laptop'))) {
+      openPowerConfirmation('restart');
+    } else if ((lower.includes('shutdown') || lower.includes('band kar')) && (lower.includes('pc') || lower.includes('laptop'))) {
+      openPowerConfirmation('shutdown');
     }
 
-    // Forward to NIVA Backend stream
+    // Forward to NIVA stream
     const res = await apiClient.sendMessage(userText);
 
     const assistantMsg: ChatMessage = {
@@ -106,7 +131,16 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
     };
 
     setMessages((prev) => [...prev, assistantMsg]);
+    setLastAssistantReply(res.text);
     setIsProcessing(false);
+  };
+
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inputVal.trim()) return;
+    const current = inputVal;
+    setInputVal('');
+    await handleSendCustomMessage(current);
   };
 
   const handleAppClick = async (appName: AllowedApp) => {
@@ -118,6 +152,91 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
       setActionNotice(`✗ ${res.error || 'Failed'}`);
     }
     setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  // Safe Power Management Handlers
+  const handleLockWorkstation = async () => {
+    setActionNotice('Locking workstation...');
+    const res = await lockWorkstation();
+    if (res.success) {
+      setActionNotice('✓ Workstation locked securely');
+      showNativeNotification('NIVA Security Gateway', 'Workstation screen locked successfully.');
+    } else {
+      setActionNotice(`✗ ${res.error || 'Lock failed'}`);
+    }
+    setTimeout(() => setActionNotice(null), 3500);
+  };
+
+  const openPowerConfirmation = (action: 'restart' | 'shutdown') => {
+    if (action === 'restart') {
+      setModalState({
+        isOpen: true,
+        action: 'restart',
+        title: 'CONFIRM SYSTEM RESTART',
+        subtext: 'SECONDARY AUTHORIZATION REQUIRED',
+        message:
+          'Kya aap sach me system restart karna chahte hain? NIVA safe restart command trigger karegi (5-second countdown).',
+      });
+    } else {
+      setModalState({
+        isOpen: true,
+        action: 'shutdown',
+        title: 'CONFIRM SYSTEM SHUTDOWN',
+        subtext: 'CRITICAL POWER ACTION GATED',
+        message:
+          'Kya aap sach me system band karna chahte hain? NIVA safe shutdown command trigger karegi (5-second countdown).',
+      });
+    }
+  };
+
+  const handleConfirmPower = async () => {
+    const action = modalState.action;
+    setModalState({ isOpen: false, action: null, title: '', message: '' });
+    if (!action) return;
+
+    if (action === 'restart') {
+      setActionNotice('Initiating system restart...');
+      const res = await restartPC(true);
+      if (res.success) {
+        setActionNotice('✓ System restart initiated (5s countdown)');
+        showNativeNotification('NIVA Power System', 'System restart initiated in 5s.');
+      } else {
+        setActionNotice(`✗ ${res.error}`);
+      }
+    } else if (action === 'shutdown') {
+      setActionNotice('Initiating system shutdown...');
+      const res = await shutdownPC(true);
+      if (res.success) {
+        setActionNotice('✓ System shutdown initiated (5s countdown)');
+        showNativeNotification('NIVA Power System', 'System shutdown initiated in 5s.');
+      } else {
+        setActionNotice(`✗ ${res.error}`);
+      }
+    }
+    setTimeout(() => setActionNotice(null), 5000);
+  };
+
+  // Voice transcript handler from DesktopVoiceOrb
+  const handleVoiceTranscript = (text: string) => {
+    if (!text.trim()) return;
+    const lower = text.toLowerCase();
+
+    // Direct Voice Command Detection
+    if (lower.includes('lock') && (lower.includes('screen') || lower.includes('laptop') || lower.includes('pc') || lower.includes('system'))) {
+      handleLockWorkstation();
+      return;
+    }
+    if (lower.includes('restart') && (lower.includes('pc') || lower.includes('laptop') || lower.includes('system'))) {
+      openPowerConfirmation('restart');
+      return;
+    }
+    if ((lower.includes('shutdown') || lower.includes('band kar') || lower.includes('turn off')) && (lower.includes('pc') || lower.includes('laptop') || lower.includes('system'))) {
+      openPowerConfirmation('shutdown');
+      return;
+    }
+
+    // Default: Dispatch as conversation message
+    handleSendCustomMessage(text);
   };
 
   return (
@@ -133,6 +252,7 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
         </div>
 
         <div className={styles.navBadges}>
+          {actionNotice && <div className={styles.actionBanner}>{actionNotice}</div>}
           <div className={`${styles.badge} ${serverOnline ? styles.onlineBadge : ''}`}>
             <span>●</span>
             <span>{serverOnline ? 'Backend API (3001) Connected' : 'Local Standalone Mode'}</span>
@@ -152,15 +272,10 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
 
       {/* Main 3-Column Layout */}
       <div className={styles.mainContent}>
-        {/* Left Column: Live Hardware Telemetry & Allowed Apps */}
+        {/* Left Column: Live Hardware Telemetry & Allowed Apps & Safe Power */}
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <span className={styles.panelTitle}>Hardware Telemetry</span>
-            {actionNotice && (
-              <span style={{ color: '#38bdf8', fontSize: '11px', fontWeight: 600 }}>
-                {actionNotice}
-              </span>
-            )}
           </div>
 
           <div className={styles.metricRow}>
@@ -247,13 +362,44 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
               <span>Terminal</span>
             </button>
           </div>
+
+          <div className={styles.panelHeader} style={{ marginTop: '16px' }}>
+            <span className={styles.panelTitle}>Safe Power Controls</span>
+          </div>
+
+          <div className={styles.powerControlGrid}>
+            <button
+              className={`${styles.powerBtn} ${styles.lockBtn}`}
+              onClick={handleLockWorkstation}
+              title="Instantly lock screen"
+            >
+              <span>🔒</span>
+              <span>Lock PC</span>
+            </button>
+            <button
+              className={`${styles.powerBtn} ${styles.restartBtn}`}
+              onClick={() => openPowerConfirmation('restart')}
+              title="Restart with confirmation"
+            >
+              <span>🔄</span>
+              <span>Restart</span>
+            </button>
+            <button
+              className={`${styles.powerBtn} ${styles.shutdownBtn}`}
+              onClick={() => openPowerConfirmation('shutdown')}
+              title="Shutdown with confirmation"
+            >
+              <span>⏻</span>
+              <span>Shutdown</span>
+            </button>
+          </div>
         </div>
 
         {/* Middle Column: Interactive NIVA Agent Stream */}
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <span className={styles.panelTitle}>Neural Conversational Stream</span>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>Real-time Dual Engine</span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Dual Voice Engine Active</span>
           </div>
 
           <div className={styles.chatContainer}>
@@ -290,7 +436,7 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
               <input
                 type="text"
                 className={styles.chatInput}
-                placeholder="Give command (e.g. 'Notepad kholo', 'system telemetry check karo')..."
+                placeholder="Give command (e.g. 'Notepad kholo', 'laptop lock kardo', 'telemetry')..."
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
               />
@@ -301,9 +447,33 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
           </div>
         </div>
 
-        {/* Right Column: Device Identity & Security Allowlist */}
+        {/* Right Column: Arc Voice Engine & Device Identity */}
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
+            <span className={styles.panelTitle}>Arc Voice Engine</span>
+          </div>
+
+          {/* Desktop Voice Orb with visible states & waveform bars */}
+          <div className={styles.voiceSection}>
+            <DesktopVoiceOrb
+              onTranscriptReady={handleVoiceTranscript}
+              lastAssistantReply={lastAssistantReply}
+              autoSpeak={autoSpeak}
+            />
+
+            <div className={styles.ttsControls}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Voice Read-Aloud</span>
+              <button
+                type="button"
+                className={styles.ttsToggleBtn}
+                onClick={() => setAutoSpeak(!autoSpeak)}
+              >
+                {autoSpeak ? '🔊 TTS: ON' : '🔇 TTS: MUTED'}
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.panelHeader} style={{ marginTop: '10px' }}>
             <span className={styles.panelTitle}>Device Identity & Pairing</span>
           </div>
 
@@ -337,31 +507,45 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
             <div className={styles.idRow}>
               <span className={styles.idLabel}>Security Policy:</span>
               <span className={styles.idValue} style={{ color: '#4ade80' }}>
-                ALLOWLIST GATED
+                GATED POWER + ALLOWLIST
               </span>
             </div>
           </div>
 
-          <div className={styles.panelHeader} style={{ marginTop: '18px' }}>
-            <span className={styles.panelTitle}>Security Protection</span>
+          <div className={styles.panelHeader} style={{ marginTop: '14px' }}>
+            <span className={styles.panelTitle}>Zero Silent Recording</span>
           </div>
 
           <div
             style={{
               fontSize: '11px',
               color: '#94a3b8',
-              lineHeight: 1.6,
+              lineHeight: 1.5,
               background: 'rgba(255,255,255,0.02)',
-              padding: '12px',
+              padding: '10px',
               borderRadius: '10px',
               border: '1px solid rgba(255,255,255,0.05)',
             }}
           >
-            🛡️ <strong>Zero Arbitrary Shell Rule:</strong> Only allowlisted, typed system commands
-            are permitted. High-privilege actions trigger mandatory secondary gateway confirmations.
+            🎙️ <strong>Transparency Rule:</strong> Mic input is never silent. Active listening is
+            indicated by pulsing Arc waves, live transcript streaming, and glowing core state.
           </div>
         </div>
       </div>
+
+      {/* Gated Human-In-The-Loop Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={modalState.isOpen}
+        title={modalState.title}
+        subtext={modalState.subtext}
+        message={modalState.message}
+        confirmLabel={
+          modalState.action === 'restart' ? 'CONFIRM RESTART PC' : 'CONFIRM SHUTDOWN PC'
+        }
+        cancelLabel="ABORT"
+        onConfirm={handleConfirmPower}
+        onCancel={() => setModalState({ isOpen: false, action: null, title: '', message: '' })}
+      />
     </div>
   );
 };

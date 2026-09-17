@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import styles from './ArcCoreHUD.module.css';
-import { getSystemTelemetry, launchAllowedApp, toggleMainWindow } from '../lib/tauriBridge';
+import { NivaDesktopVoiceRecognizer } from '../lib/voiceRecognizer';
+import { NivaDesktopVoiceSynthesizer } from '../lib/voiceSynthesizer';
+import { getSystemTelemetry, launchAllowedApp, toggleMainWindow, lockWorkstation } from '../lib/tauriBridge';
 import { SystemTelemetry, AllowedApp } from '../types/desktop';
 
 interface ArcCoreHUDProps {
@@ -11,6 +13,9 @@ export const ArcCoreHUD: React.FC<ArcCoreHUDProps> = ({ onExpandCommandCenter })
   const [telemetry, setTelemetry] = useState<SystemTelemetry | null>(null);
   const [statusText, setStatusText] = useState<string>('Jarvis Arc Core Online');
   const [isListening, setIsListening] = useState<boolean>(false);
+
+  const recognizerRef = React.useRef<NivaDesktopVoiceRecognizer | null>(null);
+  const synthesizerRef = React.useRef<NivaDesktopVoiceSynthesizer | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -25,6 +30,37 @@ export const ArcCoreHUD: React.FC<ArcCoreHUDProps> = ({ onExpandCommandCenter })
     fetchStats();
     const timer = setInterval(fetchStats, 4000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const recognizer = new NivaDesktopVoiceRecognizer('en-IN');
+    const synthesizer = new NivaDesktopVoiceSynthesizer();
+
+    recognizer.onStart = () => {
+      setIsListening(true);
+      setStatusText('🎙️ Listening...');
+    };
+
+    recognizer.onResult = (transcript: string, isFinal: boolean) => {
+      if (isFinal) {
+        setStatusText(`Command: "${transcript}"`);
+        handleVoiceCommand(transcript);
+      } else {
+        setStatusText(`"${transcript}"`);
+      }
+    };
+
+    recognizer.onError = () => {
+      setIsListening(false);
+      setStatusText('Jarvis Arc Core Online');
+    };
+
+    recognizer.onEnd = () => {
+      setIsListening(false);
+    };
+
+    recognizerRef.current = recognizer;
+    synthesizerRef.current = synthesizer;
   }, []);
 
   const handleAppLaunch = async (appName: AllowedApp) => {
@@ -42,9 +78,49 @@ export const ArcCoreHUD: React.FC<ArcCoreHUDProps> = ({ onExpandCommandCenter })
     setTimeout(() => setStatusText('Jarvis Arc Core Online'), 3000);
   };
 
+  const handleVoiceCommand = (cmd: string) => {
+    const lower = cmd.toLowerCase();
+    if (lower.includes('notepad')) {
+      handleAppLaunch('notepad');
+      synthesizerRef.current?.speak('Opening Notepad.');
+    } else if (lower.includes('calc')) {
+      handleAppLaunch('calculator');
+      synthesizerRef.current?.speak('Opening Calculator.');
+    } else if (lower.includes('chrome') || lower.includes('browser')) {
+      handleAppLaunch('chrome');
+      synthesizerRef.current?.speak('Opening Chrome browser.');
+    } else if (lower.includes('code') || lower.includes('vscode')) {
+      handleAppLaunch('vscode');
+      synthesizerRef.current?.speak('Opening Visual Studio Code.');
+    } else if (lower.includes('lock') && (lower.includes('screen') || lower.includes('pc') || lower.includes('laptop'))) {
+      lockWorkstation();
+      setStatusText('✓ Workstation locked');
+      synthesizerRef.current?.speak('Locking workstation.');
+    } else if (lower.includes('female voice') || lower.includes('female awaz')) {
+      synthesizerRef.current?.setGender('female');
+      synthesizerRef.current?.speak('Female voice profile activated.');
+    } else if (lower.includes('male voice') || lower.includes('male awaz')) {
+      synthesizerRef.current?.setGender('male');
+      synthesizerRef.current?.speak('Male baritone profile activated.');
+    } else if (lower.includes('command center') || lower.includes('open full')) {
+      toggleMainWindow();
+      onExpandCommandCenter();
+      synthesizerRef.current?.speak('Expanding Command Center.');
+    } else {
+      synthesizerRef.current?.speak(`Understood. ${cmd}`);
+    }
+  };
+
   const toggleVoiceMode = () => {
-    setIsListening(!isListening);
-    setStatusText(!isListening ? '🎙️ Listening for commands...' : 'Jarvis Arc Core Online');
+    if (!recognizerRef.current) return;
+    if (isListening) {
+      recognizerRef.current.stop();
+      setIsListening(false);
+      setStatusText('Jarvis Arc Core Online');
+    } else {
+      synthesizerRef.current?.stop();
+      recognizerRef.current.start();
+    }
   };
 
   return (
