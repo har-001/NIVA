@@ -7,23 +7,36 @@ import { config } from './index';
 import { logger } from '../utils/logger';
 
 let redis: Redis | null = null;
+let hasLoggedRedisOffline = false;
 
 export function getRedis(): Redis {
   if (!redis) {
     redis = new Redis(config.redisUrl, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+      enableOfflineQueue: false,
       retryStrategy(times) {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
+        if (times > 3) {
+          if (!hasLoggedRedisOffline) {
+            logger.warn('⚠️ Redis is offline or not running. Server continues in zero-cache fallback mode.');
+            hasLoggedRedisOffline = true;
+          }
+          return null; // Stop retrying to prevent connection error loops
+        }
+        return Math.min(times * 200, 1000);
       },
     });
 
     redis.on('connect', () => {
       logger.info('✅ Redis connected successfully');
+      hasLoggedRedisOffline = false;
     });
 
     redis.on('error', (err) => {
-      logger.error('❌ Redis connection error:', err.message);
+      if (!hasLoggedRedisOffline) {
+        logger.warn(`⚠️ Redis notice: ${err.message}. Operating in fallback mode.`);
+        hasLoggedRedisOffline = true;
+      }
     });
   }
   return redis;
