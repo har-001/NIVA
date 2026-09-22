@@ -102,38 +102,57 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
       timestamp: new Date().toLocaleTimeString(),
     };
     setMessages((prev) => [...prev, newMsg]);
-    setIsProcessing(true);
-
-    // Client-side shortcut for app launch keywords
+    // Client-side execution for local apps and core Jarvis commands
+    let directReply: string | null = null;
     const lower = userText.toLowerCase();
+
     if (lower.includes('notepad')) {
       handleAppClick('notepad');
+      directReply = 'Maine Notepad launch kar diya hai.';
     } else if (lower.includes('calc')) {
       handleAppClick('calculator');
+      directReply = 'Maine Calculator open kar diya hai.';
     } else if (lower.includes('chrome') || lower.includes('browser')) {
       handleAppClick('chrome');
+      directReply = 'Maine Chrome browser open kar diya hai.';
     } else if (lower.includes('code') || lower.includes('vscode')) {
       handleAppClick('vscode');
+      directReply = 'Maine VS Code editor open kar diya hai.';
+    } else if (lower.includes('terminal') || lower.includes('cmd')) {
+      handleAppClick('terminal');
+      directReply = 'Maine Terminal open kar diya hai.';
     } else if (lower.includes('lock') && (lower.includes('screen') || lower.includes('laptop') || lower.includes('pc'))) {
       handleLockWorkstation();
+      directReply = 'Workstation lock kar diya gaya hai.';
     } else if (lower.includes('restart') && (lower.includes('pc') || lower.includes('laptop'))) {
       openPowerConfirmation('restart');
+      directReply = 'System restart confirmation dialog open kar diya hai.';
     } else if ((lower.includes('shutdown') || lower.includes('band kar')) && (lower.includes('pc') || lower.includes('laptop'))) {
       openPowerConfirmation('shutdown');
+      directReply = 'System shutdown confirmation dialog open kar diya hai.';
+    } else if (lower.includes('hello') || lower.includes('namaste') || lower.includes('hi niva') || lower === 'hi') {
+      directReply = 'Namaste! Main NIVA hoon. Main aapki kya madad kar sakti hoon?';
+    } else if (lower.includes('kaise ho') || lower.includes('how are you')) {
+      directReply = 'Main bilkul theek hoon! Aapka laptop aur NIVA desktop engine active hain.';
+    } else if (lower.includes('who are you') || lower.includes('tum kaun ho')) {
+      directReply = 'Main NIVA hoon — aapka Neural Intelligent Virtual Assistant aur personal Jarvis.';
     }
 
-    // Forward to NIVA stream
-    const res = await apiClient.sendMessage(userText);
+    let replyText = directReply;
+    if (!replyText) {
+      const res = await apiClient.sendMessage(userText);
+      replyText = res.text;
+    }
 
     const assistantMsg: ChatMessage = {
       id: `asst-${Date.now()}`,
       role: 'assistant',
-      content: res.text,
+      content: replyText,
       timestamp: new Date().toLocaleTimeString(),
     };
 
     setMessages((prev) => [...prev, assistantMsg]);
-    setLastAssistantReply(res.text);
+    setLastAssistantReply(replyText);
     setIsProcessing(false);
   };
 

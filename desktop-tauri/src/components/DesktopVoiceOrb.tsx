@@ -21,7 +21,16 @@ export const DesktopVoiceOrb: React.FC<DesktopVoiceOrbProps> = ({
 
   const recognizerRef = useRef<NivaDesktopVoiceRecognizer | null>(null);
   const synthesizerRef = useRef<NivaDesktopVoiceSynthesizer | null>(null);
+  const silenceTimerRef = useRef<any>(null);
+  const currentTranscriptRef = useRef<string>('');
+  const isHandsFreeRef = useRef<boolean>(false);
+  const onTranscriptReadyRef = useRef(onTranscriptReady);
 
+  useEffect(() => {
+    onTranscriptReadyRef.current = onTranscriptReady;
+  }, [onTranscriptReady]);
+
+  // Initialize persistent engine instances once on mount
   useEffect(() => {
     const recognizer = new NivaDesktopVoiceRecognizer('en-IN');
     const synthesizer = new NivaDesktopVoiceSynthesizer();
@@ -32,45 +41,68 @@ export const DesktopVoiceOrb: React.FC<DesktopVoiceOrbProps> = ({
       setVoiceState('listening');
     };
 
-    recognizer.onResult = (text: string, isFinal: boolean) => {
-      if (isFinal) {
+    const dispatchPendingTranscript = () => {
+      const text = currentTranscriptRef.current.trim();
+      if (text) {
+        currentTranscriptRef.current = '';
         setInterimText('');
         setVoiceState('thinking');
-        onTranscriptReady(text);
-      } else {
-        setInterimText(text);
+        onTranscriptReadyRef.current(text);
+
+        // If not in hands-free mode, stop listening after successful dispatch
+        if (!isHandsFreeRef.current) {
+          recognizer.stop();
+        }
       }
     };
 
-    recognizer.onError = () => {
-      setVoiceState('idle');
-      setInterimText('');
+    recognizer.onResult = (text: string, isFinal: boolean) => {
+      currentTranscriptRef.current = text;
+      setInterimText(text);
+
+      // Debounce final utterance by 1.2 seconds so user has time to finish their sentence
+      clearTimeout(silenceTimerRef.current);
+      if (isFinal) {
+        silenceTimerRef.current = setTimeout(dispatchPendingTranscript, 1200);
+      } else {
+        silenceTimerRef.current = setTimeout(dispatchPendingTranscript, 2000);
+      }
+    };
+
+    recognizer.onError = (err: string) => {
+      console.warn('[VoiceOrb] Recognizer error:', err);
+      if (!isHandsFreeRef.current) {
+        setVoiceState('idle');
+        setInterimText('');
+      }
     };
 
     recognizer.onEnd = () => {
-      if (isHandsFree) {
-        setTimeout(() => recognizer.start(), 300);
-      } else {
+      if (!isHandsFreeRef.current) {
         setVoiceState('idle');
       }
     };
 
+    // Mute mic when NIVA speaks to prevent hearing its own voice (Echo cancellation)
     synthesizer.onStart = () => {
       setVoiceState('speaking');
+      recognizer.muteDuringSpeech(true);
     };
 
     synthesizer.onEnd = () => {
-      setVoiceState('idle');
+      setVoiceState(isHandsFreeRef.current ? 'listening' : 'idle');
+      recognizer.muteDuringSpeech(false);
     };
 
     recognizerRef.current = recognizer;
     synthesizerRef.current = synthesizer;
 
     return () => {
+      clearTimeout(silenceTimerRef.current);
       recognizer.stop();
       synthesizer.stop();
     };
-  }, [isHandsFree, onTranscriptReady]);
+  }, []);
 
   // Auto-speak when assistant responds
   useEffect(() => {
@@ -83,6 +115,15 @@ export const DesktopVoiceOrb: React.FC<DesktopVoiceOrbProps> = ({
     if (!recognizerRef.current) return;
 
     if (voiceState === 'listening') {
+      // Manual click while listening: if there is text, send immediately
+      if (currentTranscriptRef.current.trim()) {
+        clearTimeout(silenceTimerRef.current);
+        const text = currentTranscriptRef.current.trim();
+        currentTranscriptRef.current = '';
+        setInterimText('');
+        setVoiceState('thinking');
+        onTranscriptReadyRef.current(text);
+      }
       recognizerRef.current.stop();
       setVoiceState('idle');
     } else {
@@ -94,11 +135,17 @@ export const DesktopVoiceOrb: React.FC<DesktopVoiceOrbProps> = ({
   const toggleHandsFree = () => {
     const next = !isHandsFree;
     setIsHandsFree(next);
-    if (!next) {
-      recognizerRef.current?.stop();
-      setVoiceState('idle');
-    } else {
-      recognizerRef.current?.start();
+    isHandsFreeRef.current = next;
+
+    if (recognizerRef.current) {
+      recognizerRef.current.setHandsFree(next);
+      if (!next) {
+        recognizerRef.current.stop();
+        setVoiceState('idle');
+      } else {
+        synthesizerRef.current?.stop();
+        recognizerRef.current.start();
+      }
     }
   };
 
