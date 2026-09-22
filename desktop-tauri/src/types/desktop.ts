@@ -68,3 +68,29 @@ export interface SafeFileResult {
   content?: string;
   error?: string | null;
 }
+
+// Vision & Gesture Types
+export type GestureType =
+  | 'fist'
+  | 'open_palm'
+  | 'point_up'
+  | 'point_down'
+  | 'peace'
+  | 'thumbs_up'
+  | 'rock'
+  | 'none';
+
+export interface GestureEvent {
+  gesture: GestureType;
+  confidence: number;
+  timestamp: number;
+}
+
+export interface GestureActionMapping {
+  gesture: GestureType;
+  action: string;
+  label: string;
+  emoji: string;
+}
+
+export type CameraState = 'inactive' | 'requesting' | 'active' | 'error';

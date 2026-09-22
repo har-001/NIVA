@@ -12,8 +12,10 @@ import {
 } from '../lib/tauriBridge';
 import { apiClient } from '../lib/apiClient';
 import { SystemTelemetry, DeviceIdentity, AllowedApp, ChatMessage } from '../types/desktop';
+import type { GestureType } from '../types/desktop';
 import { DesktopVoiceOrb } from './DesktopVoiceOrb';
 import { ConfirmationModal } from './ConfirmationModal';
+import { VisionGesturePanel } from './VisionGesturePanel';
 
 interface DesktopCommandCenterProps {
   onSwitchToHUD: () => void;
@@ -447,8 +449,8 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
           </div>
         </div>
 
-        {/* Right Column: Arc Voice Engine & Device Identity */}
-        <div className={styles.panel}>
+        {/* Right Column: Voice, Vision & Device Identity */}
+        <div className={styles.panel} style={{ overflowY: 'auto' }}>
           <div className={styles.panelHeader}>
             <span className={styles.panelTitle}>Arc Voice Engine</span>
           </div>
@@ -474,7 +476,55 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
           </div>
 
           <div className={styles.panelHeader} style={{ marginTop: '10px' }}>
-            <span className={styles.panelTitle}>Device Identity & Pairing</span>
+            <span className={styles.panelTitle}>Vision & Hand Gestures</span>
+          </div>
+
+          <VisionGesturePanel
+            onGestureAction={(action: string, _gesture: GestureType) => {
+              switch (action) {
+                case 'mute_voice':
+                  setAutoSpeak((prev) => !prev);
+                  setActionNotice(autoSpeak ? '✊ Voice muted via gesture' : '✊ Voice unmuted via gesture');
+                  setTimeout(() => setActionNotice(null), 2500);
+                  break;
+                case 'stop_action':
+                  setActionNotice('✋ Action cancelled via gesture');
+                  setTimeout(() => setActionNotice(null), 2500);
+                  break;
+                case 'toggle_hud':
+                  toggleHUD();
+                  setActionNotice('✌️ HUD toggled via gesture');
+                  setTimeout(() => setActionNotice(null), 2500);
+                  break;
+                case 'confirm':
+                  if (modalState.isOpen) {
+                    handleConfirmPower();
+                    setActionNotice('👍 Power action confirmed via gesture');
+                    setTimeout(() => setActionNotice(null), 3000);
+                  } else {
+                    setActionNotice('👍 Confirmed via gesture');
+                    setTimeout(() => setActionNotice(null), 2500);
+                  }
+                  break;
+                case 'lock_pc':
+                  handleLockWorkstation();
+                  break;
+                case 'volume_up':
+                  setActionNotice('👆 Volume / Scroll Up');
+                  setTimeout(() => setActionNotice(null), 2000);
+                  break;
+                case 'volume_down':
+                  setActionNotice('👇 Volume / Scroll Down');
+                  setTimeout(() => setActionNotice(null), 2000);
+                  break;
+                default:
+                  break;
+              }
+            }}
+          />
+
+          <div className={styles.panelHeader} style={{ marginTop: '10px' }}>
+            <span className={styles.panelTitle}>Device Identity</span>
           </div>
 
           <div className={styles.identityCard}>
@@ -489,7 +539,7 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
               <span className={styles.idValue}>{identity?.hostname || 'HARSHIT'}</span>
             </div>
             <div className={styles.idRow}>
-              <span className={styles.idLabel}>OS Version:</span>
+              <span className={styles.idLabel}>OS:</span>
               <span className={styles.idValue}>{identity?.os_name || 'Windows 11'}</span>
             </div>
             <div className={styles.idRow}>
@@ -499,36 +549,17 @@ export const DesktopCommandCenter: React.FC<DesktopCommandCenterProps> = ({ onSw
               </span>
             </div>
             <div className={styles.idRow}>
-              <span className={styles.idLabel}>Total RAM:</span>
+              <span className={styles.idLabel}>RAM:</span>
               <span className={styles.idValue}>
                 {identity ? `${identity.total_memory_gb} GB` : '15.82 GB'}
               </span>
             </div>
             <div className={styles.idRow}>
-              <span className={styles.idLabel}>Security Policy:</span>
+              <span className={styles.idLabel}>Security:</span>
               <span className={styles.idValue} style={{ color: '#4ade80' }}>
-                GATED POWER + ALLOWLIST
+                GATED + VISION + VOICE
               </span>
             </div>
-          </div>
-
-          <div className={styles.panelHeader} style={{ marginTop: '14px' }}>
-            <span className={styles.panelTitle}>Zero Silent Recording</span>
-          </div>
-
-          <div
-            style={{
-              fontSize: '11px',
-              color: '#94a3b8',
-              lineHeight: 1.5,
-              background: 'rgba(255,255,255,0.02)',
-              padding: '10px',
-              borderRadius: '10px',
-              border: '1px solid rgba(255,255,255,0.05)',
-            }}
-          >
-            🎙️ <strong>Transparency Rule:</strong> Mic input is never silent. Active listening is
-            indicated by pulsing Arc waves, live transcript streaming, and glowing core state.
           </div>
         </div>
       </div>
