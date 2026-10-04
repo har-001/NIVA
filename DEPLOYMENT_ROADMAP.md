@@ -1,5 +1,5 @@
 # 🚀 NIVA — Master Production Deployment & Cloud Roadmap
-> **Comprehensive Step-by-Step Guide for Free Cloud Deployment (Web, Backend, Database, Mobile APK & Windows Desktop)**
+> **Comprehensive Step-by-Step Guide for Free Cloud Deployment (Web, Backend, Database, Mobile APK, Enterprise Security & Payments)**
 
 ---
 
@@ -12,7 +12,10 @@
   [4. Render Backend]      ───►  [5. Vercel Web]    ───►  [6. Mobile APK]
             │                              │                         │
             ▼                              ▼                         ▼
-  [7. Desktop .EXE]        ───►  [8. Env Cheatsheet]───►  [9. Viva Links]
+  [7. Windows .EXE]        ───►  [8. Security Shield]───► [9. Payments Hub]
+            │                              │                         │
+            ▼                              ▼                         ▼
+  [10. Env Cheatsheet]     ───►  [11. Gotchas]      ───►  [12. Viva Links]
 ```
 
 ---
@@ -42,13 +45,13 @@ NIVA is designed with a modern microservices architecture that can be deployed *
                   │  Socket.IO + Web API  │
                   └───────────┬───────────┘
                               │
-            ┌─────────────────┴─────────────────┐
-            ▼                                   ▼
-┌───────────────────────┐           ┌───────────────────────┐
-│       NEON.TECH       │           │      UPSTASH.COM      │
-│ Serverless PostgreSQL │           │ Serverless Redis 7    │
-│  Vectors + User Data  │           │ Pub/Sub Voice Chunks  │
-└───────────────────────┘           └───────────────────────┘
+     ┌────────────────────────┼────────────────────────┐
+     ▼                        ▼                        ▼
+┌─────────────┐        ┌─────────────┐          ┌─────────────┐
+│  NEON.TECH  │        │ UPSTASH.COM │          │  RAZORPAY   │
+│ Postgres 16 │        │   Redis 7   │          │  UPI & Card │
+│ Cloud Vector│        │  Cache Pub  │          │ HMAC SHA256 │
+└─────────────┘        └─────────────┘          └─────────────┘
 ```
 
 ### 📊 Free Hosting Stack Overview:
@@ -63,6 +66,8 @@ NIVA is designed with a modern microservices architecture that can be deployed *
 │ ⚡ Cache (Redis)   │ Upstash       │ Redis Pub/Sub (1 min)         │
 │ 📱 Android Mobile  │ Expo EAS      │ Standalone .apk Build (5 min) │
 │ 💻 Windows App     │ GitHub Release│ Standalone .exe Setup (3 min) │
+│ 🛡️ Security Shield │ Built-in NIVA │ Anti-XSS, Brute-Force Guard   │
+│ 💳 Payments Hub    │ Razorpay/UPI  │ HMAC SHA-256 Signatures       │
 └────────────────────┴───────────────┴───────────────────────────────┘
 ```
 
@@ -192,6 +197,7 @@ Render hamara Node.js Express 5 server aur Socket.IO host karega:
 │ JWT_SECRET       │ niva-secure-jwt-secret-2026                              │
 │ GEMINI_API_KEY   │ AIzaSy... (Your Google AI Studio API key)                │
 │ CLIENT_URL       │ https://niva-web.vercel.app (Your Vercel URL)            │
+│ PAYMENT_SECRET   │ niva_payment_hmac_secret_key_2026                        │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -288,7 +294,53 @@ Ise aap Google Drive ya GitHub ke **"Releases"** section me attach kar sakte hai
 
 ---
 
-## 📋 8. Master Environment Variables Cheat-Sheet
+## 🛡️ Stage 7: Enterprise Security & Anti-Hacking Setup
+
+NIVA me production security guardrails automatically active hain:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                   NIVA 4-LAYER SECURITY SHIELD                     │
+└────────────────────────────────────────────────────────────────────┘
+  Layer 1: Deep Input Sanitizer (XSS & SQL Injection Neutralizer)
+  Layer 2: Brute-Force Rate Limiter (Max 10 tries / 15 min lock)
+  Layer 3: Enterprise HTTP Headers (No-Sniff, Anti-Clickjacking)
+  Layer 4: Biometric Face Recognition + Written 4-Digit PIN
+```
+
+### Security Features Overview:
+- **`deepSanitizer`**: Requests me `<script>`, `javascript:...`, `../..` path traversal, aur `' OR 1=1` SQL injection attempts ko automatically clean karta hai.
+- **`authBruteForceLimiter`**: Automated credential stuffing bots ko detect karke attacker ki IP ko 15 minute ke liye block karta hai.
+- **Security Headers**: HSTS, X-Frame-Options (DENY), aur nosniff headers inject karta hai.
+
+---
+
+## 💳 Stage 8: Payments & Autonomous Commerce (Razorpay & UPI)
+
+NIVA me commercial billing aur subscriptions support pre-configured hai:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                   CRYPTOGRAPHIC PAYMENT PIPELINE                   │
+└────────────────────────────────────────────────────────────────────┘
+  User Selects Plan ───► Backend Creates Order ───► UPI / Card Payment
+                                                         │
+  Active Plan Badge ◄─── Verified Receipt     ◄─── HMAC SHA256 Signature
+```
+
+### Subscription Tiers Available:
+- **NIVA Starter Core**: `₹0 / mo` (Free Forever - Local workstation tools)
+- **NIVA Arc Cybernetic Pro**: `₹499 / mo` (Vision Scanner, Google Voice Engine, Cloud Sync)
+- **NIVA Autonomous Fleet Enterprise**: `₹1,999 / mo` (Multi-Agent Squads, Remote Workstation)
+
+### Payment Methods:
+- ⚡ **UPI / QR Code**: Google Pay, PhonePe, Paytm, BHIM (`user@upi`).
+- 💳 **Cards**: Rupay, Visa, MasterCard.
+- 🏦 **NetBanking**: All major Indian & International banks.
+
+---
+
+## 📋 9. Master Environment Variables Cheat-Sheet
 
 Deploy karte waqt is clean reference box ko follow karein:
 
@@ -304,6 +356,7 @@ Deploy karte waqt is clean reference box ko follow karein:
 │ PORT             │ 3001                                                     │
 │ NODE_ENV         │ production                                               │
 │ CLIENT_URL       │ https://niva-web.vercel.app                              │
+│ PAYMENT_SECRET   │ niva_payment_hmac_secret_key_2026                        │
 └──────────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -319,7 +372,7 @@ Deploy karte waqt is clean reference box ko follow karein:
 
 ---
 
-## 🛠️ 9. Troubleshooting & Common Gotchas
+## 🛠️ 10. Troubleshooting & Common Gotchas
 
 ```
 ┌───────────────────────────┬─────────────────────────────────────────────────┐
@@ -333,12 +386,14 @@ Deploy karte waqt is clean reference box ko follow karein:
 │ Vercel CORS Error         │ Render env CLIENT_URL me Vercel ka exact link ho│
 ├───────────────────────────┼─────────────────────────────────────────────────┤
 │ Android Install Blocked   │ Android popup me "More Details" ➔ "Install" dabayein│
+├───────────────────────────┼─────────────────────────────────────────────────┤
+│ Payment Signature Error   │ PAYMENT_SECRET backend env me match hona chahiye│
 └───────────────────────────┴─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🎯 10. College Viva & Final Presentation Showcase Links
+## 🎯 11. College Viva & Final Presentation Showcase Links
 
 College viva me examiner ko aap yeh standard portfolio dikha sakte hain:
 
@@ -350,6 +405,8 @@ College viva me examiner ko aap yeh standard portfolio dikha sakte hain:
 │ 🌐 Live Web App    │ niva-web.vercel.app              │ Voice Orb & Vision     │
 │ ⚙️ API Health      │ niva-backend.onrender.com/health │ Postgres & Sockets     │
 │ 📱 Android App     │ niva-mobile.apk                  │ Phone companion app    │
+│ 💳 Payments Hub    │ /api/v1/payments/plans           │ Razorpay UPI & Cards   │
+│ 🛡️ Security Shield │ Anti-Hacking Guardrails          │ HMAC SHA256 & BruteLim │
 │ 📄 College Report  │ Synopsis 2026.pdf                │ IEEE references & docs │
 └────────────────────┴──────────────────────────────────┴────────────────────────┘
 ```
