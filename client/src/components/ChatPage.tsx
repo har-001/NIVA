@@ -22,6 +22,7 @@ import { InternetHub } from './InternetHub';
 import { WorkflowHub } from './WorkflowHub';
 import { PluginHub } from './PluginHub';
 import { AgentSquadHub } from './AgentSquadHub';
+import { PaymentModal } from './PaymentModal';
 import styles from './ChatPage.module.css';
 
 interface Message {
@@ -953,6 +954,7 @@ export default function ChatPage() {
   const [showWorkflowHub, setShowWorkflowHub] = useState<boolean>(false);
   const [showPluginHub, setShowPluginHub] = useState<boolean>(false);
   const [showAgentSquadHub, setShowAgentSquadHub] = useState<boolean>(false);
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [lastAssistantReply, setLastAssistantReply] = useState<string>('');
   const [voiceGender, setVoiceGender] = useState<VoiceGender>('male');
   const [sidebarNews, setSidebarNews] = useState<any[]>([]);
@@ -1523,6 +1525,15 @@ export default function ChatPage() {
             >
               <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>🚀</span>
             </button>
+
+            {/* Cybernetic Payments & Subscriptions (Razorpay UPI & Cards) */}
+            <button
+              className={`btn btn-ghost btn-icon ${showPaymentModal ? styles.actionIconBtnActive : ''}`}
+              onClick={() => setShowPaymentModal(true)}
+              title="Cybernetic Payments & Subscriptions (Razorpay UPI & Cards)"
+            >
+              <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>💳</span>
+            </button>
           </div>
         </header>
 
@@ -1804,6 +1815,15 @@ export default function ChatPage() {
         isOpen={showAgentSquadHub}
         onClose={() => setShowAgentSquadHub(false)}
         onSendToChat={(prompt) => handleSend(prompt)}
+      />
+
+      {/* Cybernetic Payments & Billing Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPlanActivated={(planName) => {
+          handleSend(`Payment successful! Activated ${planName}.`);
+        }}
       />
     </div>
   );

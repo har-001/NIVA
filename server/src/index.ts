@@ -30,6 +30,8 @@ import pluginRoutes from './modules/plugins/plugin.routes';
 import agentRoutes from './modules/agents/agent.routes';
 import devopsRoutes from './modules/devops/devops.routes';
 import { devicesRoutes } from './modules/devices/devices.routes';
+import { paymentsRoutes } from './modules/payments/payments.routes';
+import { deepSanitizer, enterpriseSecurityHeaders } from './middleware/security.middleware';
 
 // Socket handlers
 import { setupChatSocket } from './modules/chat/chat.socket';
@@ -79,8 +81,14 @@ async function bootstrap(): Promise<void> {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
 
+  // Enterprise Security & Hardening Headers
+  app.use(enterpriseSecurityHeaders);
+
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
+
+  // Deep Injection & XSS Sanitizer
+  app.use(deepSanitizer);
 
   // Rate limiting
   const limiter = rateLimit({
@@ -135,6 +143,7 @@ async function bootstrap(): Promise<void> {
   app.use('/api/v1/agents', agentRoutes);
   app.use('/api/v1/devops', devopsRoutes);
   app.use('/api/v1/devices', devicesRoutes);
+  app.use('/api/v1/payments', paymentsRoutes);
 
   // --- Start Automation Scheduler ---
   schedulerService.start();

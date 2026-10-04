@@ -306,6 +306,33 @@ class ApiClient {
     });
   }
 
+  // Payments & Subscriptions (Razorpay UPI, Cards & Cryptographic Verification)
+  async getPaymentPlans() {
+    return this.request<any>('/payments/plans');
+  }
+
+  async getSubscriptionStatus() {
+    return this.request<any>('/payments/status');
+  }
+
+  async createPaymentOrder(planId: string, currency: string = 'INR', provider: string = 'razorpay') {
+    return this.request<any>('/payments/create-order', {
+      method: 'POST',
+      body: JSON.stringify({ planId, currency, provider }),
+    });
+  }
+
+  async verifyPayment(orderId: string, paymentId: string, signature: string, planId: string) {
+    return this.request<any>('/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify({ orderId, paymentId, signature, planId }),
+    });
+  }
+
+  async getPaymentHistory() {
+    return this.request<any>('/payments/history');
+  }
+
   async getGenerationJobs(type?: string) {
     const q = type ? `?type=${encodeURIComponent(type)}` : '';
     return this.request<Array<{
