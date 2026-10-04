@@ -1558,11 +1558,7 @@ export default function ChatPage() {
               <div className={styles.welcomeScreen}>
                 <div
                   className={`${styles.welcomeLogo} ${styles.arcReactorInteractive}`}
-                  onClick={() => {
-                    setShowVoiceOrb(true);
-                    const voice = new NivaVoiceSynthesizer();
-                    voice.speak('Arc Reactor active. Sun raha hu, bataiye kya karna hai.');
-                  }}
+                  onClick={() => setShowVoiceOrb(true)}
                   title="Click Arc Reactor to activate Neural Voice"
                   role="button"
                   tabIndex={0}

@@ -40,6 +40,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
   const [isSupported, setIsSupported] = useState<boolean>(true);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [currentGender, setCurrentGender] = useState<VoiceGender>(gender || 'male');
+  const [activeVoiceName, setActiveVoiceName] = useState<string>('');
   const [language, setLanguage] = useState<'en-IN' | 'hi-IN'>('en-IN');
   const [isRecordingMedia, setIsRecordingMedia] = useState<boolean>(false);
   const [isTranscribingWithGemini, setIsTranscribingWithGemini] = useState<boolean>(false);
@@ -233,14 +234,25 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
     synthesizer.onStart = () => {
       setInternalState('speaking');
+      // Mute microphone while assistant is talking to eliminate speaker echo
+      recognizer.stop();
+      stopMediaRecording();
     };
 
     synthesizer.onEnd = () => {
       setInternalState('idle');
+      // Resume listening cleanly after NIVA finishes vocalizing
+      if (isContinuousRef.current) {
+        setTimeout(() => {
+          hasDeliveredTranscriptRef.current = false;
+          recognizer.start();
+        }, 350);
+      }
     };
 
     recognizerRef.current = recognizer;
     synthesizerRef.current = synthesizer;
+    setActiveVoiceName(synthesizer.getSelectedVoiceName());
 
     if (autoStart && supported) {
       setTimeout(() => {
@@ -264,6 +276,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     if (gender && synthesizerRef.current && synthesizerRef.current.getGender() !== gender) {
       synthesizerRef.current.setGender(gender);
       setCurrentGender(gender);
+      setActiveVoiceName(synthesizerRef.current.getSelectedVoiceName());
     }
   }, [gender]);
 
@@ -274,15 +287,16 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     }
   }, [lastAssistantResponse, autoSpeakResponse]);
 
-  const toggleVoiceGender = () => {
-    const nextGender: VoiceGender = currentGender === 'male' ? 'female' : 'male';
+  const toggleVoiceGender = (explicitGender?: VoiceGender) => {
+    const nextGender: VoiceGender = explicitGender || (currentGender === 'male' ? 'female' : 'male');
     setCurrentGender(nextGender);
     if (synthesizerRef.current) {
       synthesizerRef.current.setGender(nextGender);
+      setActiveVoiceName(synthesizerRef.current.getSelectedVoiceName());
       synthesizerRef.current.speak(
         nextGender === 'female'
-          ? 'Maine female voice select kar li hai.'
-          : 'Maine male voice select kar li hai.'
+          ? 'NIVA Female voice active ho gayi hai.'
+          : 'NIVA Male voice active ho gaya hai.'
       );
     }
     onGenderChange?.(nextGender);
@@ -561,13 +575,44 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           onClick={toggleListening}
           type="button"
           style={{
-            borderColor: currentState === 'listening' ? '#ef4444' : 'rgba(56, 189, 248, 0.4)',
-            color: currentState === 'listening' ? '#fca5a5' : '#7dd3fc',
-            background: currentState === 'listening' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.08)',
-            fontWeight: 600,
+            borderColor: currentState === 'listening' ? '#ef4444' : '#22c55e',
+            color: currentState === 'listening' ? '#fca5a5' : '#4ade80',
+            background: currentState === 'listening' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.15)',
+            fontWeight: 700,
+            padding: '6px 14px',
           }}
         >
           <span>{currentState === 'listening' ? '🛑 Click to Send Voice' : '🎙️ Tap to Speak'}</span>
+        </button>
+
+        <button
+          className={`${styles.controlBtn} ${currentGender === 'male' ? styles.activeModeBtn : ''}`}
+          onClick={() => toggleVoiceGender('male')}
+          type="button"
+          title="Switch to Male AI Voice"
+          style={{
+            borderColor: currentGender === 'male' ? '#3b82f6' : 'rgba(255, 255, 255, 0.15)',
+            color: currentGender === 'male' ? '#60a5fa' : '#94a3b8',
+            background: currentGender === 'male' ? 'rgba(59, 130, 246, 0.22)' : 'transparent',
+            fontWeight: currentGender === 'male' ? 700 : 500,
+          }}
+        >
+          <span>♂️ Male Voice</span>
+        </button>
+
+        <button
+          className={`${styles.controlBtn} ${currentGender === 'female' ? styles.activeModeBtn : ''}`}
+          onClick={() => toggleVoiceGender('female')}
+          type="button"
+          title="Switch to Female AI Voice"
+          style={{
+            borderColor: currentGender === 'female' ? '#ec4899' : 'rgba(255, 255, 255, 0.15)',
+            color: currentGender === 'female' ? '#f472b6' : '#94a3b8',
+            background: currentGender === 'female' ? 'rgba(236, 72, 153, 0.22)' : 'transparent',
+            fontWeight: currentGender === 'female' ? 700 : 500,
+          }}
+        >
+          <span>♀️ Female Voice</span>
         </button>
 
         <button
@@ -580,20 +625,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
             color: language === 'hi-IN' ? '#fde047' : '#6ee7b7',
           }}
         >
-          <span>{language === 'en-IN' ? '🇮🇳 Google: en-IN (Hinglish)' : '🇮🇳 Google: हिन्दी (hi-IN)'}</span>
-        </button>
-
-        <button
-          className={`${styles.controlBtn} ${currentGender === 'female' ? styles.activeModeBtn : ''}`}
-          onClick={toggleVoiceGender}
-          type="button"
-          title={`Click to switch between Male and Female Voice (Current: ${currentGender === 'male' ? 'Male' : 'Female'})`}
-          style={{
-            borderColor: currentGender === 'male' ? 'rgba(59, 130, 246, 0.4)' : 'rgba(236, 72, 153, 0.4)',
-            color: currentGender === 'male' ? '#93c5fd' : '#f472b6',
-          }}
-        >
-          <span>{currentGender === 'male' ? '♂ Voice: Male' : '♀ Voice: Female'}</span>
+          <span>{language === 'en-IN' ? '🇮🇳 Hinglish (en-IN)' : '🇮🇳 हिन्दी (hi-IN)'}</span>
         </button>
 
         <button
@@ -601,7 +633,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           onClick={toggleContinuous}
           type="button"
         >
-          <span>{isContinuousMode ? '🟢 Hands-Free: ON' : '⚪ Hands-Free: OFF'}</span>
+          <span>{isContinuousMode ? '🟢 Auto-Listen: ON' : '⚪ Auto-Listen: OFF'}</span>
         </button>
 
         {currentState === 'speaking' && (
@@ -613,6 +645,10 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
             ⏹️ Mute Speech
           </button>
         )}
+      </div>
+
+      <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '6px', textAlign: 'center' }}>
+        🔊 Active Voice: <span style={{ color: '#818cf8', fontWeight: 600 }}>{activeVoiceName || (currentGender === 'male' ? 'Indian Male Engine' : 'Indian Female Engine')}</span>
       </div>
     </div>
   );

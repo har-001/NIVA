@@ -257,8 +257,7 @@ app.whenReady().then(() => {
     openAtLogin: false,
   });
 
-  // 2. Launch both Full Window and Floating HUD
-  createMainWindow();
+  // 2. Launch Standalone Floating Jarvis Arc Core HUD only (Zero Camera Usage)
   createHUDWindow();
   createTray();
 

@@ -190,7 +190,51 @@ export class NivaVoiceSynthesizer {
       const name = voice.name.toLowerCase();
       const lang = voice.lang.toLowerCase();
 
-      // === 1. TOP PRIORITY: AUTHENTIC INDIAN ACCENT & HINDI/ENGLISH (INDIA) ===
+      // Explicit female keywords (including Google Hindi which is female in Chrome!)
+      const isFemaleVoice =
+        name.includes('female') ||
+        name.includes('woman') ||
+        name.includes('girl') ||
+        name.includes('हिन्दी') ||
+        name.includes('google hindi') ||
+        name.includes('heera') ||
+        name.includes('neerja') ||
+        name.includes('swara') ||
+        name.includes('kalpana') ||
+        name.includes('ananya') ||
+        name.includes('aditi') ||
+        name.includes('zira') ||
+        name.includes('samantha') ||
+        name.includes('victoria') ||
+        name.includes('karen') ||
+        name.includes('hazel') ||
+        name.includes('susan') ||
+        name.includes('catherine') ||
+        name.includes('linda') ||
+        name.includes('elena') ||
+        name.includes('aria') ||
+        name.includes('jenny');
+
+      // Explicit male keywords
+      const isMaleVoice =
+        (name.includes('male') && !name.includes('female')) ||
+        name.includes('david') ||
+        name.includes('mark') ||
+        name.includes('ravi') ||
+        name.includes('madhur') ||
+        name.includes('prabhat') ||
+        name.includes('george') ||
+        name.includes('alex') ||
+        name.includes('daniel') ||
+        name.includes('guy') ||
+        name.includes('ryan') ||
+        name.includes('oliver') ||
+        name.includes('james') ||
+        name.includes('eric') ||
+        name.includes('brian') ||
+        name.includes('andrew') ||
+        name.includes('christopher');
+
       const isIndian =
         lang.includes('en-in') ||
         lang.includes('hi-in') ||
@@ -198,98 +242,85 @@ export class NivaVoiceSynthesizer {
         name.includes('india') ||
         name.includes('indian') ||
         name.includes('hindi') ||
-        name.includes('हिन्दी') ||
         name.includes('ravi') ||
         name.includes('heera') ||
         name.includes('neerja') ||
         name.includes('madhur') ||
         name.includes('swara') ||
-        name.includes('prabhat') ||
-        name.includes('kalpana') ||
-        name.includes('ananya') ||
-        name.includes('aditi');
+        name.includes('prabhat');
 
-      if (isIndian) {
-        score += 2500; // Massively prioritize Indian voices!
-      }
-
-      // === 2. GENDER MATCHING ===
       if (isMaleMode) {
-        // High quality Indian male voices
-        if (
-          name.includes('ravi') ||
-          name.includes('madhur') ||
-          name.includes('prabhat') ||
-          (name.includes('google') && (lang.includes('en-in') || lang.includes('hi-in') || name.includes('हिन्दी')))
-        ) {
-          score += 800;
-        }
-
-        if (name.includes('male') && !name.includes('female')) {
-          score += 300;
-        }
-
-        // Strongly disqualify female voices in male mode
-        if (
-          name.includes('female') ||
-          name.includes('woman') ||
-          name.includes('girl') ||
-          name.includes('heera') ||
-          name.includes('neerja') ||
-          name.includes('swara') ||
-          name.includes('kalpana') ||
-          name.includes('ananya') ||
-          name.includes('aditi') ||
-          name.includes('zira') ||
-          name.includes('samantha')
-        ) {
-          score -= 3000;
+        // STRICTLY REJECT ANY FEMALE VOICE IN MALE MODE
+        if (isFemaleVoice) {
+          score -= 20000;
+        } else {
+          // 1. Indian male voice highest priority
+          if (isIndian && (name.includes('ravi') || name.includes('madhur') || name.includes('prabhat') || isMaleVoice)) {
+            score += 5000;
+          }
+          // 2. Known male voices
+          if (name.includes('uk english male') || name.includes('english male')) {
+            score += 3000;
+          }
+          if (name.includes('david') || name.includes('mark') || name.includes('george')) {
+            score += 2500;
+          }
+          if (isMaleVoice) {
+            score += 2000;
+          }
+          if (lang.startsWith('en')) {
+            score += 200;
+          }
         }
       } else {
-        // High quality Indian female voices
-        if (
-          name.includes('heera') ||
-          name.includes('neerja') ||
-          name.includes('swara') ||
-          name.includes('kalpana') ||
-          name.includes('ananya') ||
-          name.includes('aditi') ||
-          (name.includes('google') && (lang.includes('en-in') || lang.includes('hi-in') || name.includes('हिन्दी')))
-        ) {
-          score += 800;
-        }
-
-        if (name.includes('female') && !name.includes('male')) {
-          score += 300;
-        }
-
-        // Strongly disqualify male voices in female mode
-        if (
-          name.includes('male') ||
-          name.includes('ravi') ||
-          name.includes('madhur') ||
-          name.includes('prabhat') ||
-          name.includes('david') ||
-          name.includes('george')
-        ) {
-          score -= 3000;
+        // STRICTLY REJECT ANY MALE VOICE IN FEMALE MODE
+        if (isMaleVoice) {
+          score -= 20000;
+        } else {
+          // 1. Indian female voice highest priority
+          if (isIndian || name.includes('हिन्दी') || name.includes('heera') || name.includes('neerja') || name.includes('swara')) {
+            score += 5000;
+          }
+          if (name.includes('uk english female') || name.includes('zira')) {
+            score += 2500;
+          }
+          if (isFemaleVoice) {
+            score += 2000;
+          }
+          if (lang.startsWith('en')) {
+            score += 200;
+          }
         }
       }
 
-      // === 3. Natural / Neural / Online Boost ===
       if (name.includes('natural') || name.includes('neural') || name.includes('online')) {
-        score += 250;
-      }
-      if (name.includes('google')) {
-        score += 150;
+        score += 300;
       }
 
       return { voice, score };
     });
 
     scoredVoices.sort((a, b) => b.score - a.score);
-    const bestMatch = scoredVoices[0];
-    this.selectedVoice = bestMatch?.voice || voices[0];
+    const valid = scoredVoices.find((v) => v.score > 0);
+    this.selectedVoice = valid ? valid.voice : scoredVoices[0]?.voice || voices[0];
+  }
+
+  public getAvailableVoices(): SpeechSynthesisVoice[] {
+    if (!this.synth) return [];
+    return this.synth.getVoices();
+  }
+
+  public setSpecificVoice(voiceURI: string): void {
+    if (!this.synth) return;
+    const voices = this.synth.getVoices();
+    const match = voices.find((v) => v.voiceURI === voiceURI || v.name === voiceURI);
+    if (match) {
+      this.selectedVoice = match;
+    }
+  }
+
+  public getSelectedVoiceName(): string {
+    return this.selectedVoice ? `${this.selectedVoice.name} (${this.selectedVoice.lang})` : 'Default Voice';
   }
 
   /**
@@ -383,8 +414,13 @@ export class NivaVoiceSynthesizer {
     };
 
     utterance.onerror = (e) => {
-      console.warn('Utterance speech error:', e);
-      this.playNextChunk();
+      if (e.error === 'canceled' || e.error === 'interrupted') {
+        return;
+      }
+      console.warn('Utterance speech notice:', e.error);
+      if (this.isSpeakingInternal) {
+        this.playNextChunk();
+      }
     };
 
     this.synth.speak(utterance);
