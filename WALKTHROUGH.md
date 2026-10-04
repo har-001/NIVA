@@ -117,6 +117,23 @@ NIVA now features an **Enterprise Dual-Engine Google Voice Gathering Architectur
 
 ---
 
+### Step 6: Enterprise Security & Cybernetic Payments Setup
+To protect against hacking, unauthorized access, and malicious payloads:
+
+#### 6.1 Anti-Hacking & Security Guardrails:
+1. **Deep Injection & XSS Sanitizer**: All incoming requests (`body`, `query`, `params`) pass through `deepSanitizer`, neutralizing script injections, SQL injection patterns (`' OR 1=1`), and path traversals (`../..`).
+2. **Brute-Force Account Protection**: Dedicated rate limiter on authentication (`/api/v1/auth/login`, `/api/v1/auth/pin`) that automatically locks down IPs attempting credential stuffing after 10 failed tries.
+3. **Hardening Headers**: Automatically injects `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, and `Permissions-Policy`.
+4. **Biometric Face Lock & Written PIN**: Multi-factor authentication with 3D face verification and backup 4-digit PIN (`1234`).
+
+#### 6.2 Cybernetic Payments & Billing Hub:
+- Access via the **💳 Credit Card button** in the chat header or say *"NIVA show subscription plans"*.
+- **Plans Supported**: Free Core, NIVA Arc Pro (`₹499/mo`), and Autonomous Fleet Enterprise (`₹1,999/mo`).
+- **Payment Methods**: 🇮🇳 UPI / QR Code (GPay, PhonePe, Paytm), Credit/Debit Cards, and NetBanking.
+- **Cryptographic Verification**: Every transaction is authenticated via **HMAC SHA-256 signatures**, preventing payment spoofing or tampering. Instant digital invoice receipts are generated.
+
+---
+
 ## 📱 Mobile Client Feature Matrix (All Tabs)
 
 The mobile companion application (`mobile/`) is structured into 6 cybernetic tabs:
