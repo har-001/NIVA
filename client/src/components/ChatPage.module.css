@@ -272,6 +272,21 @@
   animation: float 4s ease-in-out infinite;
 }
 
+.arcReactorInteractive {
+  cursor: pointer;
+  display: inline-block;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), filter 0.25s ease;
+}
+
+.arcReactorInteractive:hover {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 24px rgba(99, 102, 241, 0.65));
+}
+
+.arcReactorInteractive:active {
+  transform: scale(0.95);
+}
+
 .welcomeGlow {
   position: absolute;
   inset: -40px;

@@ -11,9 +11,10 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { getSocket, disconnectSocket } from '../lib/socket';
 import { VoiceOrb, VoiceState } from './VoiceOrb';
-import { VoiceGender } from '../lib/voice';
+import { VoiceGender, NivaVoiceSynthesizer } from '../lib/voice';
 import { VisionModal } from './VisionModal';
 import { FaceAuthOverlay } from './FaceAuthOverlay';
+import { terminateAllCamerasGlobally } from '../lib/cameraHardware';
 import { GestureModal } from './GestureModal';
 import { MemoryPanel } from './MemoryPanel';
 import { GenerationStudio } from './GenerationStudio';
@@ -999,11 +1000,10 @@ export default function ChatPage() {
     }
   };
 
-  // Check if startup face authentication has run this session
+  // Strict Zero-Leak Privacy: Camera is OFF by default and startup auto-trigger is permanently disabled.
+  // Terminate any active webcam hardware globally on page mount.
   useEffect(() => {
-    if (typeof window !== 'undefined' && !sessionStorage.getItem('niva_face_auth_done')) {
-      setShowFaceAuth(true);
-    }
+    terminateAllCamerasGlobally();
   }, []);
 
   // Load conversations
@@ -1556,7 +1556,18 @@ export default function ChatPage() {
 
             {messages.length === 0 && !activeConversation && !streamingContent ? (
               <div className={styles.welcomeScreen}>
-                <div className={styles.welcomeLogo}>
+                <div
+                  className={`${styles.welcomeLogo} ${styles.arcReactorInteractive}`}
+                  onClick={() => {
+                    setShowVoiceOrb(true);
+                    const voice = new NivaVoiceSynthesizer();
+                    voice.speak('Arc Reactor active. Sun raha hu, bataiye kya karna hai.');
+                  }}
+                  title="Click Arc Reactor to activate Neural Voice"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className={styles.welcomeGlow}></div>
                   <svg viewBox="0 0 100 100" width="100" height="100">
                     <defs>
@@ -1571,6 +1582,9 @@ export default function ChatPage() {
                     <circle cx="50" cy="50" r="25" fill="none" stroke="url(#welcomeGrad)" strokeWidth="0.5" opacity="0.2" />
                     <text x="50" y="58" textAnchor="middle" fill="url(#welcomeGrad)" fontSize="32" fontWeight="800" fontFamily="Inter">N</text>
                   </svg>
+                  <div style={{ marginTop: '10px', fontSize: '0.82rem', color: '#818cf8', fontWeight: 600, letterSpacing: '0.5px' }}>
+                    ⚡ Tap Arc Reactor to Speak
+                  </div>
                 </div>
                 <h2 className={styles.welcomeTitle}>
                   Hello{user?.displayName ? `, ${user.displayName}` : ''}! 👋

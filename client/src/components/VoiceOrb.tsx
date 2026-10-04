@@ -92,7 +92,11 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
       hasDeliveredTranscriptRef.current = true;
       setTranscript(finalMsg);
       onTranscriptReadyRef.current?.(finalMsg);
-      setTimeout(() => setTranscript(''), 2000);
+      // Reset delivery lock after 1.5s so subsequent voice commands capture seamlessly!
+      setTimeout(() => {
+        hasDeliveredTranscriptRef.current = false;
+        setTranscript('');
+      }, 1500);
     }
   };
 
@@ -199,6 +203,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
     recognizer.onStart = () => {
       setVoiceError(null);
+      hasDeliveredTranscriptRef.current = false;
       setInternalState('listening');
     };
 

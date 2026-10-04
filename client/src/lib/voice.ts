@@ -190,132 +190,106 @@ export class NivaVoiceSynthesizer {
       const name = voice.name.toLowerCase();
       const lang = voice.lang.toLowerCase();
 
+      // === 1. TOP PRIORITY: AUTHENTIC INDIAN ACCENT & HINDI/ENGLISH (INDIA) ===
+      const isIndian =
+        lang.includes('en-in') ||
+        lang.includes('hi-in') ||
+        lang.startsWith('hi') ||
+        name.includes('india') ||
+        name.includes('indian') ||
+        name.includes('hindi') ||
+        name.includes('हिन्दी') ||
+        name.includes('ravi') ||
+        name.includes('heera') ||
+        name.includes('neerja') ||
+        name.includes('madhur') ||
+        name.includes('swara') ||
+        name.includes('prabhat') ||
+        name.includes('kalpana') ||
+        name.includes('ananya') ||
+        name.includes('aditi');
+
+      if (isIndian) {
+        score += 2500; // Massively prioritize Indian voices!
+      }
+
+      // === 2. GENDER MATCHING ===
       if (isMaleMode) {
-        // --- MALE MODE SCORING ---
-        if (name.includes('uk english male') || (name.includes('male') && !name.includes('female'))) {
-          score += 300;
-        }
+        // High quality Indian male voices
         if (
-          name.includes('david') ||
           name.includes('ravi') ||
-          name.includes('guy') ||
-          name.includes('ryan') ||
           name.includes('madhur') ||
           name.includes('prabhat') ||
-          name.includes('christopher')
+          (name.includes('google') && (lang.includes('en-in') || lang.includes('hi-in') || name.includes('हिन्दी')))
         ) {
-          score += 280;
-        }
-        if (
-          name.includes('george') ||
-          name.includes('mark') ||
-          name.includes('alex') ||
-          name.includes('daniel') ||
-          name.includes('oliver') ||
-          name.includes('james') ||
-          name.includes('eric') ||
-          name.includes('brian') ||
-          name.includes('andrew')
-        ) {
-          score += 200;
+          score += 800;
         }
 
-        // DISQUALIFY FEMALE VOICES IN MALE MODE
+        if (name.includes('male') && !name.includes('female')) {
+          score += 300;
+        }
+
+        // Strongly disqualify female voices in male mode
         if (
           name.includes('female') ||
           name.includes('woman') ||
           name.includes('girl') ||
-          name.includes('zira') ||
-          name.includes('samantha') ||
-          name.includes('karen') ||
-          name.includes('victoria') ||
           name.includes('heera') ||
-          name.includes('kalpana') ||
-          name.includes('swara') ||
-          name.includes('jenny') ||
-          name.includes('aria') ||
-          name.includes('sonia') ||
-          name.includes('hazel') ||
-          name.includes('susan') ||
-          name.includes('catherine') ||
-          name.includes('linda') ||
-          name.includes('elena') ||
           name.includes('neerja') ||
+          name.includes('swara') ||
+          name.includes('kalpana') ||
           name.includes('ananya') ||
           name.includes('aditi') ||
-          name.includes('google us english') ||
-          name.includes('google हिन्दी') ||
-          name.includes('google hindi')
+          name.includes('zira') ||
+          name.includes('samantha')
         ) {
-          score -= 1000;
+          score -= 3000;
         }
       } else {
-        // --- FEMALE MODE SCORING ---
-        if (name.includes('uk english female') || (name.includes('female') && !name.includes('male'))) {
+        // High quality Indian female voices
+        if (
+          name.includes('heera') ||
+          name.includes('neerja') ||
+          name.includes('swara') ||
+          name.includes('kalpana') ||
+          name.includes('ananya') ||
+          name.includes('aditi') ||
+          (name.includes('google') && (lang.includes('en-in') || lang.includes('hi-in') || name.includes('हिन्दी')))
+        ) {
+          score += 800;
+        }
+
+        if (name.includes('female') && !name.includes('male')) {
           score += 300;
         }
-        if (
-          name.includes('zira') ||
-          name.includes('heera') ||
-          name.includes('kalpana') ||
-          name.includes('swara') ||
-          name.includes('jenny') ||
-          name.includes('aria') ||
-          name.includes('sonia') ||
-          name.includes('neerja') ||
-          name.includes('ananya') ||
-          name.includes('samantha') ||
-          name.includes('victoria')
-        ) {
-          score += 280;
-        }
-        if (
-          name.includes('google us english') ||
-          name.includes('google हिन्दी') ||
-          name.includes('google hindi') ||
-          name.includes('karen') ||
-          name.includes('hazel') ||
-          name.includes('susan') ||
-          name.includes('catherine') ||
-          name.includes('linda') ||
-          name.includes('elena')
-        ) {
-          score += 250;
-        }
 
-        // DISQUALIFY MALE VOICES IN FEMALE MODE
+        // Strongly disqualify male voices in female mode
         if (
-          name.includes('uk english male') ||
-          name.includes('david') ||
+          name.includes('male') ||
           name.includes('ravi') ||
-          name.includes('guy') ||
-          name.includes('ryan') ||
           name.includes('madhur') ||
           name.includes('prabhat') ||
-          name.includes('christopher') ||
-          name.includes('george') ||
-          name.includes('mark') ||
-          (name.includes('male') && !name.includes('female'))
+          name.includes('david') ||
+          name.includes('george')
         ) {
-          score -= 1000;
+          score -= 3000;
         }
       }
 
-      // Natural / Neural enhancements
+      // === 3. Natural / Neural / Online Boost ===
       if (name.includes('natural') || name.includes('neural') || name.includes('online')) {
-        score += 25;
+        score += 250;
       }
-
-      // Language preferences
-      if (lang.includes('en-in') || lang.includes('hi-in')) score += 15;
-      if (lang.startsWith('en')) score += 10;
+      if (name.includes('google')) {
+        score += 150;
+      }
 
       return { voice, score };
     });
 
     scoredVoices.sort((a, b) => b.score - a.score);
-    const bestMatch = scoredVoices.find((v) => v.score > 0);
-    this.selectedVoice = bestMatch ? bestMatch.voice : (scoredVoices.find((v) => v.score >= -100)?.voice || voices[0]);
+    const bestMatch = scoredVoices[0];
+    this.selectedVoice = bestMatch?.voice || voices[0];
   }
 
   /**
@@ -400,8 +374,8 @@ export class NivaVoiceSynthesizer {
       utterance.voice = this.selectedVoice;
     }
 
-    utterance.rate = 1.0; // Natural speaking pace
-    utterance.pitch = this.currentGender === 'male' ? 0.85 : 1.05; // 0.85 for male baritone, 1.05 for natural female pitch
+    utterance.rate = 1.0; // Natural conversational speaking pace
+    utterance.pitch = 1.0; // Authentic human pitch (no artificial robotic distortion)
 
     utterance.onend = () => {
       // Small natural pause between sentences

@@ -2,7 +2,7 @@
   "name": "niva-mobile",
   "version": "1.0.0",
   "description": "NIVA — Neural Intelligent Virtual Assistant Cross-Platform Mobile Client (Expo + React Native + TypeScript)",
-  "main": "index.js",
+  "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -11,13 +11,17 @@
     "test": "tsx test-mobile-foundation.ts"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~4.0.1",
     "@react-native-async-storage/async-storage": "^2.1.0",
     "expo": "~52.0.0",
+    "expo-asset": "^57.0.18",
     "expo-status-bar": "~2.0.0",
     "lucide-react-native": "^0.469.0",
     "react": "18.3.1",
+    "react-dom": "^18.3.1",
     "react-native": "0.76.5",
     "react-native-svg": "15.8.0",
+    "react-native-web": "^0.19.13",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
