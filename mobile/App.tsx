@@ -8,10 +8,12 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar } fro
 import { AuthProvider } from './src/context/AuthContext';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
+import { CommunicationScreen } from './src/screens/CommunicationScreen';
 import { RemoteScreen } from './src/screens/RemoteScreen';
+import { MemoryScreen } from './src/screens/MemoryScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 
-type Tab = 'home' | 'chat' | 'remote' | 'settings';
+type Tab = 'home' | 'chat' | 'comm' | 'remote' | 'memory' | 'settings';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -27,8 +29,12 @@ const AppContent: React.FC = () => {
         );
       case 'chat':
         return <ChatScreen />;
+      case 'comm':
+        return <CommunicationScreen />;
       case 'remote':
         return <RemoteScreen />;
+      case 'memory':
+        return <MemoryScreen />;
       case 'settings':
         return <SettingsScreen />;
       default:
@@ -71,6 +77,16 @@ const AppContent: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'comm' && styles.tabItemActive]}
+          onPress={() => setActiveTab('comm')}
+        >
+          <Text style={styles.tabIcon}>📡</Text>
+          <Text style={[styles.tabLabel, activeTab === 'comm' && styles.tabLabelActive]}>
+            COMMS
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.tabItem, activeTab === 'remote' && styles.tabItemActive]}
           onPress={() => setActiveTab('remote')}
         >
@@ -81,12 +97,22 @@ const AppContent: React.FC = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'memory' && styles.tabItemActive]}
+          onPress={() => setActiveTab('memory')}
+        >
+          <Text style={styles.tabIcon}>🧠</Text>
+          <Text style={[styles.tabLabel, activeTab === 'memory' && styles.tabLabelActive]}>
+            MEMORY
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.tabItem, activeTab === 'settings' && styles.tabItemActive]}
           onPress={() => setActiveTab('settings')}
         >
           <Text style={styles.tabIcon}>⚙️</Text>
           <Text style={[styles.tabLabel, activeTab === 'settings' && styles.tabLabelActive]}>
-            SETTINGS
+            CONFIG
           </Text>
         </TouchableOpacity>
       </View>

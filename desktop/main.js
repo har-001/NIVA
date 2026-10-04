@@ -2,7 +2,7 @@
 // NIVA — Standalone Jarvis Desktop Assistant Main Process
 // ============================================
 
-const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, Notification, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, Notification, screen, session } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 
@@ -238,6 +238,20 @@ ipcMain.on('system:notify', (_event, { title, body }) => {
 
 // App Lifecycle
 app.whenReady().then(() => {
+  // 0. Grant microphone, camera and media permissions automatically
+  if (session && session.defaultSession) {
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      if (permission === 'media' || permission === 'notifications') {
+        return callback(true);
+      }
+      callback(true);
+    });
+
+    session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+      return true;
+    });
+  }
+
   // 1. Ensure automatic raw electron boot auto-launch is disabled
   app.setLoginItemSettings({
     openAtLogin: false,

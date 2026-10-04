@@ -48,7 +48,10 @@ export class NivaVoiceRecognizer {
           }
 
           if (finalTranscript.trim()) {
-            this.onResult?.(finalTranscript.trim(), true);
+            const raw = finalTranscript.trim();
+            // Automatically strip wake-words so user can say "Hey NIVA, open youtube"
+            const cleaned = raw.replace(/^(?:hey\s+niva|niva|jarvis|namaste\s+niva|suno\s+niva)[,\s:]*/i, '').trim();
+            this.onResult?.(cleaned || raw, true);
           } else if (interimTranscript.trim()) {
             this.onResult?.(interimTranscript.trim(), false);
           }
@@ -56,7 +59,7 @@ export class NivaVoiceRecognizer {
 
         this.recognition.onerror = (event: any) => {
           if (event.error !== 'no-speech') {
-            console.warn('Speech recognition error:', event.error);
+            console.warn('Google Speech recognition error:', event.error);
           }
           this.onError?.(event.error);
         };
@@ -81,12 +84,25 @@ export class NivaVoiceRecognizer {
   }
 
   public start(): void {
-    if (this.recognition && !this.isListening) {
-      try {
-        this.recognition.start();
-      } catch (err) {
-        console.warn('Failed to start recognition:', err);
+    if (!this.recognition) {
+      this.onError?.('not-supported');
+      return;
+    }
+
+    if (this.isListening) {
+      return;
+    }
+
+    try {
+      this.recognition.start();
+    } catch (err: any) {
+      // Ignore if recognition already started
+      if (err?.name === 'InvalidStateError' || err?.message?.includes('already started')) {
+        this.isListening = true;
+        return;
       }
+      console.warn('Failed to start recognition:', err);
+      this.onError?.(err?.name || err?.message || 'start-failed');
     }
   }
 
@@ -96,6 +112,8 @@ export class NivaVoiceRecognizer {
         this.recognition.stop();
       } catch (err) {
         console.warn('Failed to stop recognition:', err);
+      } finally {
+        this.isListening = false;
       }
     }
   }

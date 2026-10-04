@@ -18,6 +18,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import authRoutes from './modules/auth/auth.routes';
 import chatRoutes from './modules/chat/chat.routes';
 import visionRoutes from './modules/ai/vision.routes';
+import voiceRoutes from './modules/ai/voice.routes';
 import memoryRoutes from './modules/memory/memory.routes';
 import documentRoutes from './modules/memory/document.routes';
 import generationRoutes from './modules/generation/generation.routes';
@@ -28,6 +29,7 @@ import { schedulerService } from './modules/automation/scheduler.service';
 import pluginRoutes from './modules/plugins/plugin.routes';
 import agentRoutes from './modules/agents/agent.routes';
 import devopsRoutes from './modules/devops/devops.routes';
+import { devicesRoutes } from './modules/devices/devices.routes';
 
 // Socket handlers
 import { setupChatSocket } from './modules/chat/chat.socket';
@@ -122,6 +124,7 @@ async function bootstrap(): Promise<void> {
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/chat', chatRoutes);
   app.use('/api/v1/vision', visionRoutes);
+  app.use('/api/v1/voice', voiceRoutes);
   app.use('/api/v1/memory', memoryRoutes);
   app.use('/api/v1/documents', documentRoutes);
   app.use('/api/v1/generate', generationRoutes);
@@ -131,6 +134,7 @@ async function bootstrap(): Promise<void> {
   app.use('/api/v1/plugins', pluginRoutes);
   app.use('/api/v1/agents', agentRoutes);
   app.use('/api/v1/devops', devopsRoutes);
+  app.use('/api/v1/devices', devicesRoutes);
 
   // --- Start Automation Scheduler ---
   schedulerService.start();

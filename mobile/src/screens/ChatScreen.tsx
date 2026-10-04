@@ -2,7 +2,7 @@
 // NIVA — Mobile Chat & Command Stream Screen
 // ============================================
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,19 +17,92 @@ import {
 } from 'react-native';
 import { ChatMessage } from '../types/mobile';
 import { mobileApiClient } from '../services/apiClient';
+import { mobileSocketService } from '../services/socketService';
+import { mobileVoiceService } from '../services/voiceService';
+import { VisionCaptureModal } from '../components/VisionCaptureModal';
 
 export const ChatScreen: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'msg-1',
       role: 'assistant',
-      content: 'Hello Sir! NIVA Mobile Core is online. Aap voice ya text se koi bhi command de sakte hain.',
+      content: 'Hello Sir! NIVA Mobile Stream is online. Real-time streaming and voice synthesis active.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [visionModalOpen, setVisionModalOpen] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const conversationId = useRef(`conv-mob-${Date.now()}`);
+
+  const toggleMic = () => {
+    if (isListening) {
+      mobileVoiceService.stopListening();
+      setIsListening(false);
+    } else {
+      setIsListening(true);
+      mobileVoiceService.startListening(
+        (transcript, isFinal) => {
+          setInputText(transcript);
+          if (isFinal && transcript.trim()) {
+            handleSend(transcript.trim());
+            setIsListening(false);
+          }
+        },
+        (err) => {
+          console.warn('Mic error:', err);
+          setIsListening(false);
+        },
+        () => {
+          setIsListening(false);
+        }
+      );
+    }
+  };
+
+  useEffect(() => {
+    // Initialize Socket.IO connection
+    mobileSocketService.connect();
+
+    // Listen for live token stream chunks
+    const unsubChunk = mobileSocketService.onStreamChunk((data) => {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === 'assistant' && last.id.startsWith('stream-')) {
+          return [
+            ...prev.slice(0, -1),
+            { ...last, content: last.content + data.chunk },
+          ];
+        }
+        return [
+          ...prev,
+          {
+            id: `stream-${Date.now()}`,
+            role: 'assistant',
+            content: data.chunk,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ];
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+
+    // Listen for stream end
+    const unsubEnd = mobileSocketService.onStreamEnd((data) => {
+      setIsSending(false);
+      if (voiceEnabled && data.fullContent) {
+        mobileVoiceService.speak(data.fullContent);
+      }
+    });
+
+    return () => {
+      unsubChunk();
+      unsubEnd();
+    };
+  }, [voiceEnabled]);
 
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
@@ -46,17 +119,25 @@ export const ChatScreen: React.FC = () => {
     setInputText('');
     setIsSending(true);
 
-    const res = await mobileApiClient.sendMessage(text);
+    // Try Socket.IO streaming first
+    const socketDispatched = mobileSocketService.sendStreamMessage(conversationId.current, text);
 
-    const asstMsg: ChatMessage = {
-      id: `asst-${Date.now()}`,
-      role: 'assistant',
-      content: res.reply,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
+    if (!socketDispatched) {
+      // Direct REST fallback
+      const res = await mobileApiClient.sendMessage(text);
+      const asstMsg: ChatMessage = {
+        id: `asst-${Date.now()}`,
+        role: 'assistant',
+        content: res.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev: ChatMessage[]) => [...prev, asstMsg]);
+      setIsSending(false);
+      if (voiceEnabled) {
+        mobileVoiceService.speak(res.reply);
+      }
+    }
 
-    setMessages((prev: ChatMessage[]) => [...prev, asstMsg]);
-    setIsSending(false);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
@@ -64,7 +145,17 @@ export const ChatScreen: React.FC = () => {
     const isUser = item.role === 'user';
     return (
       <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.asstBubble]}>
-        <Text style={styles.bubbleRole}>{isUser ? 'YOU' : 'NIVA AI'}</Text>
+        <View style={styles.bubbleHeaderRow}>
+          <Text style={styles.bubbleRole}>{isUser ? 'YOU' : 'NIVA AI'}</Text>
+          {!isUser && (
+            <TouchableOpacity
+              onPress={() => mobileVoiceService.speak(item.content)}
+              style={styles.speakBtn}
+            >
+              <Text style={styles.speakBtnText}>🔊</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <Text style={styles.bubbleText}>{item.content}</Text>
         <Text style={styles.bubbleTime}>{item.timestamp}</Text>
       </View>
@@ -79,15 +170,28 @@ export const ChatScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>NEURAL STREAM</Text>
-          <TouchableOpacity onPress={() => setMessages([messages[0]])}>
-            <Text style={styles.clearBtn}>CLEAR</Text>
-          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>NEURAL STREAM</Text>
+            <Text style={styles.headerSubtitle}>
+              {mobileSocketService.isConnected() ? '⚡ SOCKET.IO STREAMING' : '🌐 REST BRIDGE ACTIVE'}
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={[styles.voiceToggle, voiceEnabled && styles.voiceToggleActive]}
+              onPress={() => setVoiceEnabled(!voiceEnabled)}
+            >
+              <Text style={styles.voiceToggleText}>{voiceEnabled ? '🔊 VOICE ON' : '🔇 MUTE'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setMessages([messages[0]])}>
+              <Text style={styles.clearBtn}>CLEAR</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Quick Suggestion Chips */}
         <View style={styles.chipRow}>
-          {['Lock PC', 'Open Notepad', 'Open Chrome', 'Kaise ho?'].map((chip) => (
+          {['Lock PC', 'System Status', 'Open VS Code', 'Memory Search'].map((chip) => (
             <TouchableOpacity key={chip} style={styles.chip} onPress={() => handleSend(chip)}>
               <Text style={styles.chipText}>{chip}</Text>
             </TouchableOpacity>
@@ -105,14 +209,30 @@ export const ChatScreen: React.FC = () => {
 
         {/* Input Bar */}
         <View style={styles.inputContainer}>
+          <TouchableOpacity
+            style={styles.camBtn}
+            onPress={() => setVisionModalOpen(true)}
+          >
+            <Text style={styles.camBtnText}>📷</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.camBtn, isListening && { backgroundColor: '#ef4444' }]}
+            onPress={toggleMic}
+            accessibilityLabel="Voice Input"
+          >
+            <Text style={styles.camBtnText}>{isListening ? '🛑' : '🎙️'}</Text>
+          </TouchableOpacity>
+
           <TextInput
             style={styles.input}
-            placeholder="Type your instruction to NIVA..."
-            placeholderTextColor="#64748b"
+            placeholder={isListening ? "Listening to your voice..." : "Type your instruction to NIVA..."}
+            placeholderTextColor={isListening ? "#38bdf8" : "#64748b"}
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={() => handleSend()}
           />
+
           <TouchableOpacity
             style={[styles.sendBtn, isSending && styles.sendBtnDisabled]}
             onPress={() => handleSend()}
@@ -125,6 +245,15 @@ export const ChatScreen: React.FC = () => {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Vision Scanner Modal */}
+        <VisionCaptureModal
+          visible={visionModalOpen}
+          onClose={() => setVisionModalOpen(false)}
+          onAnalysisResult={(desc) => {
+            handleSend(`Analyze this photo: ${desc}`);
+          }}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -152,6 +281,61 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#38bdf8',
     letterSpacing: 1.5,
+  },
+  headerSubtitle: {
+    fontSize: 8.5,
+    color: '#64748b',
+    fontWeight: '700',
+    marginTop: 2,
+    letterSpacing: 0.8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  voiceToggle: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  voiceToggleActive: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
+  },
+  voiceToggleText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#93c5fd',
+  },
+  bubbleHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  speakBtn: {
+    padding: 2,
+  },
+  speakBtnText: {
+    fontSize: 11,
+  },
+  camBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  camBtnText: {
+    fontSize: 16,
   },
   clearBtn: {
     fontSize: 10,

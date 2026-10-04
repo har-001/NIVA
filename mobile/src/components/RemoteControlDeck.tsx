@@ -44,6 +44,30 @@ export const RemoteControlDeck: React.FC<RemoteControlDeckProps> = ({
     onActionFeedback?.(res.message);
   };
 
+  const [screenshotTaken, setScreenshotTaken] = useState(false);
+
+  const handleMediaAction = async (action: 'volume_up' | 'volume_down' | 'volume_mute' | 'media_play_pause') => {
+    onActionFeedback?.(`Dispatched: ${action.replace('_', ' ')}...`);
+    const res = await mobileApiClient.dispatchRemoteCommand({
+      action,
+      timestamp: Date.now(),
+    });
+    onActionFeedback?.(res.message);
+  };
+
+  const handleCaptureScreen = async () => {
+    setLoadingApp('screenshot');
+    onActionFeedback?.('Capturing live PC screen...');
+    const res = await mobileApiClient.dispatchRemoteCommand({
+      action: 'take_screenshot',
+      timestamp: Date.now(),
+    });
+    setLoadingApp(null);
+    setScreenshotTaken(true);
+    onActionFeedback?.(res.message);
+    setTimeout(() => setScreenshotTaken(false), 5000);
+  };
+
   return (
     <View style={styles.card}>
       {/* Header */}
@@ -79,6 +103,23 @@ export const RemoteControlDeck: React.FC<RemoteControlDeckProps> = ({
         </View>
       </View>
 
+      {/* Media & Volume Deck */}
+      <Text style={styles.sectionLabel}>PC MEDIA & VOLUME CONTROLS</Text>
+      <View style={styles.mediaRow}>
+        <TouchableOpacity style={styles.mediaBtn} onPress={() => handleMediaAction('volume_down')}>
+          <Text style={styles.mediaBtnText}>🔉 VOL -</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.mediaBtn} onPress={() => handleMediaAction('volume_up')}>
+          <Text style={styles.mediaBtnText}>🔊 VOL +</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.mediaBtn} onPress={() => handleMediaAction('volume_mute')}>
+          <Text style={styles.mediaBtnText}>🔇 MUTE</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.mediaBtn} onPress={() => handleMediaAction('media_play_pause')}>
+          <Text style={styles.mediaBtnText}>⏯️ PLAY</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Quick Allowed App Launchers */}
       <Text style={styles.sectionLabel}>REMOTE DESKTOP APPS</Text>
       <View style={styles.appGrid}>
@@ -99,6 +140,17 @@ export const RemoteControlDeck: React.FC<RemoteControlDeckProps> = ({
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Screen Capture Action */}
+      <TouchableOpacity
+        style={styles.screenCaptureBtn}
+        onPress={handleCaptureScreen}
+        disabled={loadingApp !== null}
+      >
+        <Text style={styles.screenCaptureBtnText}>
+          {screenshotTaken ? '✅ SCREEN CAPTURED & SAVED' : '📸 CAPTURE PC SCREEN'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Security Gated Action */}
       <TouchableOpacity
@@ -211,6 +263,43 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#e2e8f0',
+  },
+  mediaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 14,
+  },
+  mediaBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#38bdf8',
+    letterSpacing: 0.5,
+  },
+  screenCaptureBtn: {
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  screenCaptureBtnText: {
+    color: '#c084fc',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.8,
   },
   lockBtn: {
     backgroundColor: 'rgba(239, 68, 68, 0.15)',

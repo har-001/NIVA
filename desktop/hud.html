@@ -14,14 +14,19 @@
         <div class="pulseDot"></div>
         <span>NIVA CORE</span>
       </div>
-      <div class="windowControls noDrag">
-        <button class="miniBtn" id="btnExpand" title="Open Full Web Command Center">⛶</button>
-        <button class="miniBtn" id="btnMinimize" title="Hide to Tray">−</button>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <button class="miniBtn noDrag" id="btnLangToggle" title="Google Speech Language: Indian English / Hindi" style="font-size: 0.68rem; color: #38bdf8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 4px; padding: 2px 6px;">
+          🇮🇳 en-IN
+        </button>
+        <div class="windowControls noDrag">
+          <button class="miniBtn" id="btnExpand" title="Open Full Web Command Center">⛶</button>
+          <button class="miniBtn" id="btnMinimize" title="Hide to Tray">−</button>
+        </div>
       </div>
     </div>
 
     <!-- Holographic Arc Reactor Core -->
-    <div class="coreWrapper noDrag" id="coreTrigger" title="Click or say 'Hey NIVA' to speak">
+    <div class="coreWrapper noDrag" id="coreTrigger" title="Click to start/stop Google voice listening">
       <div class="arcRing3"></div>
       <div class="arcRing2"></div>
       <div class="arcRing1"></div>
@@ -46,6 +51,14 @@
 
     <!-- Speech & Status Output -->
     <div class="statusOutput" id="statusOutput">Tap Core or say "Hey NIVA"</div>
+
+    <!-- Quick Voice Test Chips (Instant viva & microphone test fallback) -->
+    <div style="display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; width: 100%; flex-wrap: wrap;" class="noDrag">
+      <button class="miniBtn" id="testVoiceStatus" style="font-size: 0.68rem; background: rgba(56,189,248,0.12); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.25); border-radius: 4px; padding: 2px 6px;">⚡ Status</button>
+      <button class="miniBtn" id="testVoiceNotepad" style="font-size: 0.68rem; background: rgba(16,185,129,0.12); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.25); border-radius: 4px; padding: 2px 6px;">⚡ Notepad</button>
+      <button class="miniBtn" id="testVoiceYouTube" style="font-size: 0.68rem; background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); border-radius: 4px; padding: 2px 6px;">⚡ YouTube</button>
+      <button class="miniBtn" id="testVoiceCalc" style="font-size: 0.68rem; background: rgba(168,85,247,0.12); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.25); border-radius: 4px; padding: 2px 6px;">⚡ Calc</button>
+    </div>
 
     <!-- Quick Laptop Actions Bar -->
     <div class="quickActions noDrag">

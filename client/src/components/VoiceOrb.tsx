@@ -2,11 +2,14 @@
 
 // ============================================
 // NIVA — Neural Voice Orb Component
+// Google Voice Gathering Engine (en-IN Hinglish & hi-IN Hindi)
+// Realtime Web Speech + MediaRecorder to Google Gemini 2.0 Audio
 // ============================================
 
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './VoiceOrb.module.css';
 import { NivaVoiceRecognizer, NivaVoiceSynthesizer, VoiceGender } from '../lib/voice';
+import { api } from '../lib/api';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -17,6 +20,8 @@ interface VoiceOrbProps {
   lastAssistantResponse?: string;
   gender?: VoiceGender;
   onGenderChange?: (gender: VoiceGender) => void;
+  autoStart?: boolean;
+  onClose?: () => void;
 }
 
 export const VoiceOrb: React.FC<VoiceOrbProps> = ({
@@ -26,22 +31,161 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
   lastAssistantResponse,
   gender,
   onGenderChange,
+  autoStart = false,
+  onClose,
 }) => {
   const [internalState, setInternalState] = useState<VoiceState>('idle');
   const [transcript, setTranscript] = useState<string>('');
   const [isContinuousMode, setIsContinuousMode] = useState<boolean>(false);
   const [isSupported, setIsSupported] = useState<boolean>(true);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [currentGender, setCurrentGender] = useState<VoiceGender>(gender || 'male');
+  const [language, setLanguage] = useState<'en-IN' | 'hi-IN'>('en-IN');
+  const [isRecordingMedia, setIsRecordingMedia] = useState<boolean>(false);
+  const [isTranscribingWithGemini, setIsTranscribingWithGemini] = useState<boolean>(false);
 
   const recognizerRef = useRef<NivaVoiceRecognizer | null>(null);
   const synthesizerRef = useRef<NivaVoiceSynthesizer | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const onTranscriptReadyRef = useRef(onTranscriptReady);
+  const isContinuousRef = useRef(isContinuousMode);
+  const hasDeliveredTranscriptRef = useRef(false);
 
   // Computed state combining parent state and local voice activity
   const currentState: VoiceState =
-    parentState === 'thinking' ? 'thinking' : internalState !== 'idle' ? internalState : parentState;
+    isTranscribingWithGemini || parentState === 'thinking'
+      ? 'thinking'
+      : internalState !== 'idle'
+      ? internalState
+      : parentState;
 
   useEffect(() => {
-    // Initialize Voice Recognizer & Synthesizer
+    onTranscriptReadyRef.current = onTranscriptReady;
+  }, [onTranscriptReady]);
+
+  useEffect(() => {
+    isContinuousRef.current = isContinuousMode;
+  }, [isContinuousMode]);
+
+  const toggleLanguage = () => {
+    const nextLang: 'en-IN' | 'hi-IN' = language === 'en-IN' ? 'hi-IN' : 'en-IN';
+    setLanguage(nextLang);
+    recognizerRef.current?.setLanguage(nextLang);
+    if (synthesizerRef.current) {
+      synthesizerRef.current.speak(
+        nextLang === 'hi-IN'
+          ? 'Maine Google Hindi voice engine select kar liya hai.'
+          : 'Maine Google Indian English voice engine select kar liya hai.'
+      );
+    }
+  };
+
+  // Helper to send transcript to chat pipeline
+  const deliverTranscript = (text: string) => {
+    const cleaned = text
+      .replace(/^(?:hey\s+niva|niva|jarvis|namaste\s+niva|suno\s+niva)[,\s:]*/i, '')
+      .trim();
+    const finalMsg = cleaned || text.trim();
+    if (finalMsg) {
+      hasDeliveredTranscriptRef.current = true;
+      setTranscript(finalMsg);
+      onTranscriptReadyRef.current?.(finalMsg);
+      setTimeout(() => setTranscript(''), 2000);
+    }
+  };
+
+  // Google MediaRecorder fallback capturing real audio stream
+  const startMediaRecording = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) return;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : 'audio/wav';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Stop stream tracks
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        setIsRecordingMedia(false);
+
+        // If Web Speech already delivered, no need to query Gemini audio
+        if (hasDeliveredTranscriptRef.current) {
+          return;
+        }
+
+        if (audioChunksRef.current.length > 0) {
+          try {
+            setIsTranscribingWithGemini(true);
+            const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+            if (audioBlob.size > 1000) {
+              const reader = new FileReader();
+              reader.onloadend = async () => {
+                const base64Audio = reader.result as string;
+                try {
+                  const res = await api.transcribeAudio(base64Audio, mimeType, language);
+                  if (res.data?.text && !hasDeliveredTranscriptRef.current) {
+                    deliverTranscript(res.data.text);
+                  }
+                } catch (transcribeErr) {
+                  console.warn('Google Gemini voice transcription error:', transcribeErr);
+                } finally {
+                  setIsTranscribingWithGemini(false);
+                  setInternalState('idle');
+                }
+              };
+              reader.readAsDataURL(audioBlob);
+              return;
+            }
+          } catch (e) {
+            console.warn('Error processing audio chunks:', e);
+          }
+        }
+        setIsTranscribingWithGemini(false);
+        setInternalState('idle');
+      };
+
+      recorder.start(250);
+      mediaRecorderRef.current = recorder;
+      setIsRecordingMedia(true);
+    } catch (err: any) {
+      console.warn('Microphone stream error:', err);
+      if (err.name === 'NotAllowedError') {
+        setVoiceError('Microphone permission blocked. Click the lock 🔒 in the browser address bar to Allow.');
+      }
+    }
+  };
+
+  const stopMediaRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {
+        console.warn('Stop recorder error:', e);
+      }
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    // Initialize Voice Recognizer & Synthesizer ONCE
     const recognizer = new NivaVoiceRecognizer('en-IN');
     const synthesizer = new NivaVoiceSynthesizer();
 
@@ -50,28 +194,32 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     }
     setCurrentGender(synthesizer.getGender());
 
-    setIsSupported(recognizer.isSupported());
+    const supported = recognizer.isSupported();
+    setIsSupported(supported);
 
     recognizer.onStart = () => {
+      setVoiceError(null);
       setInternalState('listening');
     };
 
     recognizer.onResult = (text: string, isFinal: boolean) => {
       setTranscript(text);
       if (isFinal && text.trim()) {
-        onTranscriptReady(text.trim());
-        setTranscript('');
+        deliverTranscript(text.trim());
       }
     };
 
     recognizer.onError = (err) => {
-      console.warn('Voice error:', err);
-      setInternalState('idle');
+      console.warn('Google Speech recognition note:', err);
+      if (err === 'not-allowed') {
+        setVoiceError('Microphone permission blocked. Click the lock 🔒 icon in browser URL bar to Allow.');
+      } else if (err === 'network') {
+        setVoiceError('Google Speech Network issue. Using Gemini Audio Engine.');
+      }
     };
 
     recognizer.onEnd = () => {
-      if (isContinuousMode) {
-        // restart if in continuous conversation mode
+      if (isContinuousRef.current) {
         setTimeout(() => recognizer.start(), 300);
       } else {
         setInternalState('idle');
@@ -89,11 +237,22 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     recognizerRef.current = recognizer;
     synthesizerRef.current = synthesizer;
 
+    if (autoStart && supported) {
+      setTimeout(() => {
+        try {
+          recognizer.start();
+        } catch (e) {
+          console.warn('AutoStart error:', e);
+        }
+      }, 250);
+    }
+
     return () => {
       recognizer.stop();
       synthesizer.stop();
+      stopMediaRecording();
     };
-  }, [isContinuousMode, onTranscriptReady]);
+  }, []); // Run ONCE on mount
 
   // Sync with prop changes if parent updates gender
   useEffect(() => {
@@ -125,13 +284,30 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
   };
 
   const toggleListening = () => {
-    if (!recognizerRef.current) return;
+    setVoiceError(null);
+
     if (currentState === 'listening') {
-      recognizerRef.current.stop();
+      // User tapped to finish speaking
+      recognizerRef.current?.stop();
+      stopMediaRecording();
       setInternalState('idle');
     } else {
+      // User tapped to start speaking
+      hasDeliveredTranscriptRef.current = false;
       synthesizerRef.current?.stop();
-      recognizerRef.current.start();
+      setInternalState('listening');
+
+      // 1. Start Google Speech Recognition
+      if (recognizerRef.current?.isSupported()) {
+        try {
+          recognizerRef.current.start();
+        } catch (err: any) {
+          console.warn('Recognizer start notice:', err);
+        }
+      }
+
+      // 2. Start parallel MediaRecorder as reliable Google Gemini audio fallback
+      startMediaRecording();
     }
   };
 
@@ -140,9 +316,19 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     setIsContinuousMode(next);
     if (!next) {
       recognizerRef.current?.stop();
+      stopMediaRecording();
       setInternalState('idle');
     } else {
       recognizerRef.current?.start();
+      startMediaRecording();
+    }
+  };
+
+  const triggerPresetVoiceCommand = (commandText: string) => {
+    setTranscript(commandText);
+    deliverTranscript(commandText);
+    if (synthesizerRef.current) {
+      synthesizerRef.current.speak(`Executing: ${commandText}`);
     }
   };
 
@@ -157,19 +343,54 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
   const getStatusLabel = () => {
     switch (currentState) {
-      case 'listening': return '🎙️ NIVA is listening (Google Engine)...';
-      case 'thinking': return '🧠 NIVA is thinking & processing...';
-      case 'speaking': return `🔊 NIVA is speaking (${currentGender === 'male' ? 'Male Voice' : 'Female Voice'})...`;
-      default: return 'Tap orb to speak with NIVA';
+      case 'listening':
+        return `🎙️ Google Voice Engine Active (${language === 'en-IN' ? 'Hinglish / en-IN' : 'हिन्दी / hi-IN'})... Click core when finished speaking.`;
+      case 'thinking':
+        return isTranscribingWithGemini
+          ? '🧠 Google Gemini 2.0 Flash Transcribing Audio...'
+          : '🧠 NIVA is thinking & processing...';
+      case 'speaking':
+        return `🔊 NIVA Vocalizing (${currentGender === 'male' ? 'Male Voice' : 'Female Voice'})...`;
+      default:
+        return 'Click Arc Reactor or say "Hey NIVA" to speak';
     }
   };
 
   return (
     <div className={`${styles.orbContainer} ${getContainerStateClass()}`}>
+      {onClose && (
+        <button
+          onClick={onClose}
+          type="button"
+          title="Close Voice Orb"
+          style={{
+            position: 'absolute',
+            top: '12px',
+            right: '16px',
+            background: 'rgba(255, 255, 255, 0.08)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '50%',
+            width: '28px',
+            height: '28px',
+            color: '#94a3b8',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '12px',
+            zIndex: 10,
+          }}
+        >
+          ✕
+        </button>
+      )}
+
+      {/* Holographic Arc Reactor Orb (Clickable to start/stop listening) */}
       <div
         className={styles.orbWrapper}
         onClick={toggleListening}
-        title={currentState === 'listening' ? 'Click to stop listening' : 'Click to talk to NIVA'}
+        title={currentState === 'listening' ? 'Click to stop listening and send' : 'Click Arc Reactor to talk with NIVA'}
+        style={{ cursor: 'pointer', userSelect: 'none' }}
       >
         <div className={styles.ring3} />
         <div className={styles.ring2} />
@@ -190,15 +411,171 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
 
       <div className={styles.statusLabel}>{getStatusLabel()}</div>
 
+      {/* Wake Word Helper Badge */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          fontSize: '0.76rem',
+          color: '#94a3b8',
+          marginTop: '-4px',
+          marginBottom: '8px',
+        }}
+      >
+        <span>⚡ Wake Word:</span>
+        <code style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>
+          "Hey NIVA"
+        </code>
+        <span>or</span>
+        <code style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>
+          "NIVA"
+        </code>
+      </div>
+
+      {voiceError && (
+        <div
+          style={{
+            margin: '8px 16px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: '#fca5a5',
+            fontSize: '0.85rem',
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>⚠️ {voiceError}</span>
+          <button
+            onClick={() => {
+              setVoiceError(null);
+              toggleListening();
+            }}
+            type="button"
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              borderRadius: '4px',
+              color: '#fff',
+              padding: '3px 8px',
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {transcript && <div className={styles.transcriptPreview}>"{transcript}"</div>}
+
+      {/* One-Click Voice Demonstration Pills (Guaranteed viva presentation fallback) */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          margin: '6px 0 10px',
+        }}
+      >
+        <span style={{ fontSize: '0.74rem', color: '#64748b' }}>Quick Test:</span>
+        <button
+          onClick={() => triggerPresetVoiceCommand('NIVA, system health and laptop status report do')}
+          type="button"
+          style={{
+            background: 'rgba(56, 189, 248, 0.08)',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '0.75rem',
+            color: '#7dd3fc',
+            cursor: 'pointer',
+          }}
+        >
+          📊 System Status
+        </button>
+        <button
+          onClick={() => triggerPresetVoiceCommand('NIVA, open YouTube and play Bollywood hits')}
+          type="button"
+          style={{
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '0.75rem',
+            color: '#fca5a5',
+            cursor: 'pointer',
+          }}
+        >
+          ▶️ Play YouTube
+        </button>
+        <button
+          onClick={() => triggerPresetVoiceCommand('NIVA, open Notepad on my laptop')}
+          type="button"
+          style={{
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '0.75rem',
+            color: '#6ee7b7',
+            cursor: 'pointer',
+          }}
+        >
+          📝 Open Notepad
+        </button>
+        <button
+          onClick={() => triggerPresetVoiceCommand('NIVA, write a quick Python script to check system CPU')}
+          type="button"
+          style={{
+            background: 'rgba(168, 85, 247, 0.08)',
+            border: '1px solid rgba(168, 85, 247, 0.25)',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '0.75rem',
+            color: '#d8b4fe',
+            cursor: 'pointer',
+          }}
+        >
+          💻 Code Script
+        </button>
+      </div>
 
       <div className={styles.controlsRow}>
         <button
-          className={`${styles.controlBtn} ${isContinuousMode ? styles.activeModeBtn : ''}`}
-          onClick={toggleContinuous}
+          className={`${styles.controlBtn} ${currentState === 'listening' ? styles.activeModeBtn : ''}`}
+          onClick={toggleListening}
           type="button"
+          style={{
+            borderColor: currentState === 'listening' ? '#ef4444' : 'rgba(56, 189, 248, 0.4)',
+            color: currentState === 'listening' ? '#fca5a5' : '#7dd3fc',
+            background: currentState === 'listening' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.08)',
+            fontWeight: 600,
+          }}
         >
-          <span>{isContinuousMode ? '🟢 Hands-Free: ON' : '⚪ Hands-Free: OFF'}</span>
+          <span>{currentState === 'listening' ? '🛑 Click to Send Voice' : '🎙️ Tap to Speak'}</span>
+        </button>
+
+        <button
+          className={`${styles.controlBtn} ${language === 'hi-IN' ? styles.activeModeBtn : ''}`}
+          onClick={toggleLanguage}
+          type="button"
+          title={`Google Speech Language: ${language === 'en-IN' ? 'Indian English / Hinglish' : 'Pure Hindi'}`}
+          style={{
+            borderColor: language === 'hi-IN' ? 'rgba(234, 179, 8, 0.4)' : 'rgba(16, 185, 129, 0.4)',
+            color: language === 'hi-IN' ? '#fde047' : '#6ee7b7',
+          }}
+        >
+          <span>{language === 'en-IN' ? '🇮🇳 Google: en-IN (Hinglish)' : '🇮🇳 Google: हिन्दी (hi-IN)'}</span>
         </button>
 
         <button
@@ -212,6 +589,14 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           }}
         >
           <span>{currentGender === 'male' ? '♂ Voice: Male' : '♀ Voice: Female'}</span>
+        </button>
+
+        <button
+          className={`${styles.controlBtn} ${isContinuousMode ? styles.activeModeBtn : ''}`}
+          onClick={toggleContinuous}
+          type="button"
+        >
+          <span>{isContinuousMode ? '🟢 Hands-Free: ON' : '⚪ Hands-Free: OFF'}</span>
         </button>
 
         {currentState === 'speaking' && (

@@ -45,10 +45,16 @@ server/uploads/
 backups/
 niva_workspace/
 
-# Build Kits & Showcase (private, not for GitHub)
+# Build Kits & Showcase & Synopses (private, not for GitHub)
 NIVA_AI_AGENT_BUILD_KIT/
 NIVA_Unified_Build_Kit/
 social_media_showcase/
+Sypnosis/
+sypnosis/
+Synopsis/
+synopsis/
+Clg Docs/
+Clgdocs/
 
 # Misc
 *.tsbuildinfo

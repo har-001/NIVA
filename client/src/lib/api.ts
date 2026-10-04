@@ -293,6 +293,19 @@ class ApiClient {
     });
   }
 
+  // Voice Transcription (Google Gemini Fallback)
+  async transcribeAudio(audioBase64: string, mimeType: string = 'audio/webm', language: string = 'en-IN') {
+    return this.request<{
+      text: string;
+      languageDetected?: string;
+      engine?: string;
+      confidence?: number;
+    }>('/voice/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ audio: audioBase64, mimeType, language }),
+    });
+  }
+
   async getGenerationJobs(type?: string) {
     const q = type ? `?type=${encodeURIComponent(type)}` : '';
     return this.request<Array<{

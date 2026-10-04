@@ -1538,6 +1538,8 @@ export default function ChatPage() {
                 lastAssistantResponse={lastAssistantReply}
                 gender={voiceGender}
                 onGenderChange={(g) => handleToggleVoiceGender(g)}
+                autoStart={true}
+                onClose={() => setShowVoiceOrb(false)}
               />
             )}
 

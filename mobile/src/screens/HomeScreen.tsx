@@ -7,6 +7,8 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAr
 import { ArcReactorMobile, OrbState } from '../components/ArcReactorMobile';
 import { useAuth } from '../context/AuthContext';
 import { mobileApiClient } from '../services/apiClient';
+import { mobileVoiceService } from '../services/voiceService';
+import { VisionCaptureModal } from '../components/VisionCaptureModal';
 import { DesktopTelemetry } from '../types/mobile';
 
 interface HomeScreenProps {
@@ -21,8 +23,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { serverOnline, serverHost } = useAuth();
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [quickInput, setQuickInput] = useState('');
-  const [lastReply, setLastReply] = useState<string>('Ready for voice or text commands, Sir.');
+  const [lastReply, setLastReply] = useState<string>('Ready for voice, vision or text commands, Sir.');
   const [telemetry, setTelemetry] = useState<DesktopTelemetry | null>(null);
+  const [visionModalOpen, setVisionModalOpen] = useState(false);
 
   useEffect(() => {
     mobileApiClient.getDesktopTelemetry().then(setTelemetry);
@@ -31,15 +34,58 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const handleOrbPress = () => {
     if (orbState === 'idle') {
       setOrbState('listening');
-      setTimeout(() => {
-        setOrbState('thinking');
-        setTimeout(() => {
-          setOrbState('speaking');
-          setLastReply('Listening mode active. Say "Lock laptop" or "Open notepad".');
-          setTimeout(() => setOrbState('idle'), 3500);
-        }, 1200);
-      }, 2000);
+      let hasDelivered = false;
+
+      // Trigger Google voice listening or status inquiry
+      mobileVoiceService.startListening(
+        (transcript, isFinal) => {
+          if (transcript) setQuickInput(transcript);
+          if (isFinal && transcript.trim() && !hasDelivered) {
+            hasDelivered = true;
+            setOrbState('thinking');
+            mobileApiClient.sendMessage(transcript.trim())
+              .then((res) => {
+                setLastReply(res.reply);
+                setOrbState('speaking');
+                mobileVoiceService.speak(res.reply, () => setOrbState('idle'));
+              })
+              .catch((err) => {
+                console.warn('Orb error:', err);
+                setOrbState('idle');
+              });
+          }
+        },
+        (err) => {
+          console.warn('Voice recognition notice:', err);
+          if (!hasDelivered) {
+            hasDelivered = true;
+            setOrbState('thinking');
+            mobileApiClient.sendMessage('Status report and system health')
+              .then((res) => {
+                setLastReply(res.reply);
+                setOrbState('speaking');
+                mobileVoiceService.speak(res.reply, () => setOrbState('idle'));
+              })
+              .catch(() => setOrbState('idle'));
+          }
+        },
+        () => {
+          if (!hasDelivered) {
+            hasDelivered = true;
+            setOrbState('thinking');
+            mobileApiClient.sendMessage('Status report and system health')
+              .then((res) => {
+                setLastReply(res.reply);
+                setOrbState('speaking');
+                mobileVoiceService.speak(res.reply, () => setOrbState('idle'));
+              })
+              .catch(() => setOrbState('idle'));
+          }
+        }
+      );
     } else {
+      mobileVoiceService.stopListening();
+      mobileVoiceService.stopSpeaking();
       setOrbState('idle');
     }
   };
@@ -53,7 +99,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const res = await mobileApiClient.sendMessage(msg);
     setLastReply(res.reply);
     setOrbState('speaking');
-    setTimeout(() => setOrbState('idle'), 3000);
+    mobileVoiceService.speak(res.reply, () => setOrbState('idle'));
   };
 
   return (
@@ -117,9 +163,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <TouchableOpacity
             style={styles.shortcutBtn}
+            onPress={() => setVisionModalOpen(true)}
+          >
+            <Text style={styles.shortcutIcon}>📷</Text>
+            <Text style={styles.shortcutText}>Vision Scan</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.shortcutBtn}
             onPress={() => {
               mobileApiClient.dispatchRemoteCommand({ action: 'lock_workstation', timestamp: Date.now() });
               setLastReply('Laptop screen lock signal dispatched.');
+              mobileVoiceService.speak('Laptop workstation locked.');
             }}
           >
             <Text style={styles.shortcutIcon}>🔒</Text>
@@ -134,6 +189,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+
+      {/* Multimodal Vision Camera Scanner Modal */}
+      <VisionCaptureModal
+        visible={visionModalOpen}
+        onClose={() => setVisionModalOpen(false)}
+        onAnalysisResult={(desc) => {
+          setLastReply(`Vision Analysis: ${desc}`);
+          mobileVoiceService.speak(desc);
+        }}
+      />
     </SafeAreaView>
   );
 };
