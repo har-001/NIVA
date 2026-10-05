@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './VoiceOrb.module.css';
-import { NivaVoiceRecognizer, NivaVoiceSynthesizer, VoiceGender } from '../lib/voice';
+import { NivaVoiceRecognizer, NivaVoiceSynthesizer, VoiceGender, normalizeAcousticTranscript } from '../lib/voice';
 import { api } from '../lib/api';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -41,6 +41,8 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [currentGender, setCurrentGender] = useState<VoiceGender>(gender || 'male');
   const [activeVoiceName, setActiveVoiceName] = useState<string>('');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>('');
   const [language, setLanguage] = useState<'en-IN' | 'hi-IN'>('en-IN');
   const [isRecordingMedia, setIsRecordingMedia] = useState<boolean>(false);
   const [isTranscribingWithGemini, setIsTranscribingWithGemini] = useState<boolean>(false);
@@ -83,12 +85,18 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     }
   };
 
-  // Helper to send transcript to chat pipeline
+  // Helper to send transcript to chat pipeline with phonetic normalization
   const deliverTranscript = (text: string) => {
-    const cleaned = text
-      .replace(/^(?:hey\s+niva|niva|jarvis|namaste\s+niva|suno\s+niva)[,\s:]*/i, '')
-      .trim();
-    const finalMsg = cleaned || text.trim();
+    const norm = normalizeAcousticTranscript(text);
+    if (norm.isWakeWordOnly) {
+      if (synthesizerRef.current) {
+        synthesizerRef.current.speak('Haan Harsh! Main sun raha hoon, kahiye kya kaam karna hai?');
+      }
+      setTranscript('Haan Harsh! Main sun raha hoon...');
+      return;
+    }
+
+    const finalMsg = norm.cleaned || norm.original;
     if (finalMsg) {
       hasDeliveredTranscriptRef.current = true;
       setTranscript(finalMsg);
@@ -202,16 +210,47 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     const supported = recognizer.isSupported();
     setIsSupported(supported);
 
+    const syncVoices = () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const vList = window.speechSynthesis.getVoices();
+        setAvailableVoices(vList);
+        if (synthesizerRef.current) {
+          const selected = synthesizerRef.current.getSelectedVoice();
+          if (selected) {
+            setSelectedVoiceURI(selected.voiceURI);
+            setActiveVoiceName(`${selected.name} (${selected.lang})`);
+          }
+        }
+      }
+    };
+
+    syncVoices();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = syncVoices;
+    }
+
     recognizer.onStart = () => {
       setVoiceError(null);
       hasDeliveredTranscriptRef.current = false;
       setInternalState('listening');
     };
 
-    recognizer.onResult = (text: string, isFinal: boolean) => {
+    recognizer.onResult = (text: string, isFinal: boolean, isWakeWordOnly?: boolean) => {
       setTranscript(text);
-      if (isFinal && text.trim()) {
-        deliverTranscript(text.trim());
+      if (isFinal) {
+        if (isWakeWordOnly) {
+          if (synthesizerRef.current) {
+            synthesizerRef.current.speak('Haan Harsh! Main sun raha hoon, kahiye kya kaam karna hai?');
+          }
+          setTranscript('Haan Harsh! Main sun raha hoon, kahiye kya kaam karna hai?');
+          setTimeout(() => {
+            recognizerRef.current?.start();
+          }, 1200);
+          return;
+        }
+        if (text.trim()) {
+          deliverTranscript(text.trim());
+        }
       }
     };
 
@@ -292,7 +331,12 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
     setCurrentGender(nextGender);
     if (synthesizerRef.current) {
       synthesizerRef.current.setGender(nextGender);
-      setActiveVoiceName(synthesizerRef.current.getSelectedVoiceName());
+      const name = synthesizerRef.current.getSelectedVoiceName();
+      const current = synthesizerRef.current.getSelectedVoice();
+      setActiveVoiceName(name);
+      if (current) {
+        setSelectedVoiceURI(current.voiceURI);
+      }
       synthesizerRef.current.speak(
         nextGender === 'female'
           ? 'NIVA Female voice active ho gayi hai.'
@@ -300,6 +344,22 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
       );
     }
     onGenderChange?.(nextGender);
+  };
+
+  const handleVoiceSelect = (voiceURI: string) => {
+    setSelectedVoiceURI(voiceURI);
+    if (synthesizerRef.current) {
+      synthesizerRef.current.setSpecificVoice(voiceURI);
+      const name = synthesizerRef.current.getSelectedVoiceName();
+      setActiveVoiceName(name);
+      synthesizerRef.current.speak('Voice successfully select ho gayi hai.');
+    }
+  };
+
+  const handleTestVoice = () => {
+    if (synthesizerRef.current) {
+      synthesizerRef.current.speak('Namaste Harsh! Main NIVA hoon, aapka personal AI assistant. Voice test bilkul successful hai.');
+    }
   };
 
   const toggleListening = () => {
@@ -523,7 +583,7 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
           📊 System Status
         </button>
         <button
-          onClick={() => triggerPresetVoiceCommand('NIVA, open YouTube and play Bollywood hits')}
+          onClick={() => triggerPresetVoiceCommand('NIVA, YouTube open karo aur usmein gana search karo koi bhi aur usko play karo')}
           type="button"
           style={{
             background: 'rgba(239, 68, 68, 0.08)',
@@ -535,7 +595,22 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
             cursor: 'pointer',
           }}
         >
-          ▶️ Play YouTube
+          ▶️ Play Songs
+        </button>
+        <button
+          onClick={() => triggerPresetVoiceCommand('NIVA, WhatsApp kholo aur +91 98765 43210 ko message bhejo Hello from NIVA')}
+          type="button"
+          style={{
+            background: 'rgba(34, 197, 94, 0.08)',
+            border: '1px solid rgba(34, 197, 94, 0.25)',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '0.75rem',
+            color: '#86efac',
+            cursor: 'pointer',
+          }}
+        >
+          💬 WhatsApp Msg
         </button>
         <button
           onClick={() => triggerPresetVoiceCommand('NIVA, open Notepad on my laptop')}
@@ -647,7 +722,71 @@ export const VoiceOrb: React.FC<VoiceOrbProps> = ({
         )}
       </div>
 
-      <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '6px', textAlign: 'center' }}>
+      {/* Voice Engine Dropdown & Instant Test Button */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          margin: '8px 12px 2px',
+          flexWrap: 'wrap',
+          background: 'rgba(255, 255, 255, 0.04)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '8px',
+          padding: '5px 12px',
+        }}
+      >
+        <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Voice Engine:</span>
+        <select
+          value={selectedVoiceURI}
+          onChange={(e) => handleVoiceSelect(e.target.value)}
+          style={{
+            background: '#1e293b',
+            color: '#e2e8f0',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '6px',
+            padding: '3px 8px',
+            fontSize: '0.74rem',
+            maxWidth: '240px',
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          {availableVoices.length === 0 ? (
+            <option value="">{activeVoiceName || 'Default System Voice'}</option>
+          ) : (
+            availableVoices.map((v) => (
+              <option key={v.voiceURI} value={v.voiceURI}>
+                {v.name} ({v.lang})
+              </option>
+            ))
+          )}
+        </select>
+
+        <button
+          onClick={handleTestVoice}
+          type="button"
+          title="Click to test this voice immediately"
+          style={{
+            background: 'rgba(56, 189, 248, 0.15)',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            borderRadius: '6px',
+            color: '#38bdf8',
+            padding: '3px 10px',
+            fontSize: '0.74rem',
+            cursor: 'pointer',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          <span>🔊 Test Voice</span>
+        </button>
+      </div>
+
+      <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '4px', textAlign: 'center' }}>
         🔊 Active Voice: <span style={{ color: '#818cf8', fontWeight: 600 }}>{activeVoiceName || (currentGender === 'male' ? 'Indian Male Engine' : 'Indian Female Engine')}</span>
       </div>
     </div>

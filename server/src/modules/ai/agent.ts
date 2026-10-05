@@ -82,10 +82,27 @@ export class NivaAgent {
   ): AsyncGenerator<AgentStreamEvent, void, unknown> {
     const provider = aiRegistry.getProvider();
 
+    // Clean user message of acoustic wake-words ("i never", "hey niva", "aniva", etc.)
+    const cleanedMessage = userMessage
+      .replace(/^(?:i\s*never|hey\s*never|hi\s*never|in\s*ever|he\s*never|hay\s*never|high\s*never|hey\s*niva|hi\s*niva|namaste\s*niva|suno\s*niva|hey\s*neeva|hi\s*neeva|hey\s*niba|hi\s*niba|aniva|aniwa|univa|eniva|niva|neeva|niba|jarvis)[,\s:\-]*/i, '')
+      .trim();
+
+    // If user only uttered the wake word ("Hey NIVA" or "I never")
+    if (!cleanedMessage && userMessage.trim().length > 0) {
+      yield {
+        type: 'chunk',
+        content: 'Haan Harsh! Main sun raha hoon. Boliye, aapke laptop par main kya kar sakta hoon?'
+      };
+      yield { type: 'done' };
+      return;
+    }
+
+    const effectiveUserMessage = cleanedMessage || userMessage;
+
     // Build memory-augmented context
     const enrichedContext = await this.buildMemoryContext(
       userContext?.userId,
-      userMessage,
+      effectiveUserMessage,
       userContext
     );
 
@@ -95,7 +112,7 @@ export class NivaAgent {
     const messages: AIMessage[] = [
       { role: 'system', content: systemPrompt },
       ...history,
-      { role: 'user', content: userMessage },
+      { role: 'user', content: effectiveUserMessage },
     ];
 
     try {
@@ -148,10 +165,16 @@ export class NivaAgent {
               explanation = `${verbalConfirm}\n\n${execution.result}`;
             } else if (toolName === 'system_open_url') {
               const url = String(chunk.toolCall.arguments?.url || '');
-              if (url.includes('youtube.com')) {
-                explanation = 'Maine aapke laptop par YouTube open kar diya hai.';
+              if (url.includes('youtube.com/results?search_query=')) {
+                const query = decodeURIComponent(url.split('search_query=')[1] || '').replace(/\+/g, ' ');
+                verbalConfirm = `Maine aapke laptop par YouTube me "${query}" search karke play kar diya hai.`;
+                explanation = `Maine aapke laptop browser me YouTube open karke **"${query}"** search karke play kar diya hai! 🎵\n\n> URL: [${url}](${url})`;
+              } else if (url.includes('youtube.com')) {
+                verbalConfirm = 'Maine aapke laptop par YouTube open kar diya hai.';
+                explanation = 'Maine aapke laptop browser me YouTube launch kar diya hai! 📺';
               } else {
-                explanation = 'Maine aapke laptop browser me page open kar diya hai.';
+                verbalConfirm = 'Maine website open kar di hai.';
+                explanation = `Maine aapke laptop browser me page open kar diya hai: [${url}](${url})`;
               }
             } else if (toolName === 'system_info') {
               verbalConfirm = 'Aapke laptop ka system status check kar liya hai.';
@@ -181,8 +204,11 @@ export class NivaAgent {
               verbalConfirm = 'Maine email dispatch kar diya hai.';
               explanation = `${verbalConfirm}\n\n${execution.result}`;
             } else if (toolName === 'send_message') {
-              verbalConfirm = 'Maine message dispatch kar diya hai.';
-              explanation = `${verbalConfirm}\n\n${execution.result}`;
+              const channel = String(chunk.toolCall.arguments?.channel || 'whatsapp').toUpperCase();
+              const recipient = chunk.toolCall.arguments?.recipient || 'contact';
+              const msg = chunk.toolCall.arguments?.message || '';
+              verbalConfirm = `Maine ${channel} par ${recipient} ke liye message prepare karke launch kar diya hai.`;
+              explanation = `Maine aapke laptop par **${channel}** launch kar diya hai with pre-filled message for **${recipient}**:\n\n> "${msg}"\n\nAap WhatsApp window me direct **Enter** press karke message send kar sakte hain! 🚀`;
             } else if (toolName === 'initiate_call') {
               verbalConfirm = 'Call connect ho gayi hai.';
               explanation = `${verbalConfirm}\n\n${execution.result}`;

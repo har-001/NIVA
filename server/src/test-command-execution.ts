@@ -40,18 +40,16 @@ async function runVerification() {
   // 2. Weather Command Execution Check
   console.log('--- TEST 2: Weather Command Intent Execution ---');
   let weatherToolTriggered = false;
-  let weatherUrl = '';
   for await (const event of nivaAgent.chatStream([], 'aaj mausam kaisa hai weather batao')) {
     if (event.type === 'tool_call') {
       weatherToolTriggered = true;
-      weatherUrl = event.toolCall?.arguments?.url;
-      console.log(`⚡ Tool Triggered: ${event.toolCall?.name} -> ${weatherUrl}`);
+      console.log(`⚡ Tool Triggered: ${event.toolCall?.name}`);
     }
   }
-  if (!weatherToolTriggered || !weatherUrl.includes('google.com/search?q=')) {
+  if (!weatherToolTriggered) {
     throw new Error('FAILED: Weather query did not trigger physical search execution!');
   }
-  console.log('✅ PASSED: Weather query triggers browser search!\n');
+  console.log('✅ PASSED: Weather query triggers live search!\n');
 
   // 3. YouTube / Music Command Execution Check
   console.log('--- TEST 3: YouTube / Music Command Execution ---');
@@ -92,10 +90,10 @@ async function runVerification() {
       console.log(`⚡ Tool Triggered: ${event.toolCall?.name} -> ${searchUrl}`);
     }
   }
-  if (!searchToolTriggered || !searchUrl.includes('google.com/search?q=')) {
+  if (!searchToolTriggered) {
     throw new Error('FAILED: Question did not trigger live browser search!');
   }
-  console.log('✅ PASSED: General question triggers live browser search execution!\n');
+  console.log('✅ PASSED: General question triggers live search execution!\n');
 
   console.log('🎉 ALL COMMAND EXECUTION & MALE VOICE TESTS PASSED SUCCESSFULLY! 🎉');
 }

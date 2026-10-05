@@ -3,6 +3,44 @@
 // Natural Voice Selection, Chunked Speech & Text Preprocessing
 // ============================================
 
+export interface NormalizedVoiceResult {
+  cleaned: string;
+  isWakeWordOnly: boolean;
+  original: string;
+}
+
+/**
+ * Phonetically normalizes Chromium Web Speech API acoustic transcriptions.
+ * Specifically corrects Indian-accent mishearings where "Hey NIVA" is transcribed as "I never", "in ever", etc.
+ */
+export function normalizeAcousticTranscript(raw: string): NormalizedVoiceResult {
+  if (!raw) return { cleaned: '', isWakeWordOnly: false, original: '' };
+
+  const original = raw.trim();
+  let text = original;
+
+  // 1. Acoustic phonetic patterns for "Hey NIVA" / "NIVA"
+  const wakeWordPattern = /^(?:i\s*never|hey\s*never|hi\s*never|in\s*ever|he\s*never|hay\s*never|high\s*never|hey\s*niva|hi\s*niva|namaste\s*niva|suno\s*niva|hey\s*neeva|hi\s*neeva|hey\s*niba|hi\s*niba|aniva|aniwa|univa|eniva|niva|neeva|niba|jarvis)[,\s:\-]*/i;
+
+  const hadWakeWord = wakeWordPattern.test(text);
+  let cleaned = text.replace(wakeWordPattern, '').trim();
+
+  // Strip leading casual greetings
+  cleaned = cleaned.replace(/^(?:hello|hi|arre|bhai|yaar|suno|namaste)\s+(?:i\s*never|hey\s*never|niva|neeva|niba)[,\s:\-]*/i, '').trim();
+
+  // Phonetic correction for app names in Hinglish speech
+  cleaned = cleaned
+    .replace(/\b(?:you\s+tube|u\s*tube|yt)\b/gi, 'YouTube')
+    .replace(/\b(?:whats\s*app|what's\s*app|what\s*app|whastapp)\b/gi, 'WhatsApp')
+    .replace(/\b(?:not\s*pad|node\s*pad)\b/gi, 'Notepad')
+    .replace(/\b(?:vs\s*code|v\s*s\s*code|visual\s*studio\s*code)\b/gi, 'VS Code')
+    .replace(/\b(?:crome|google\s*crome)\b/gi, 'Chrome');
+
+  const isWakeWordOnly = hadWakeWord && (!cleaned || cleaned.length < 2);
+
+  return { cleaned, isWakeWordOnly, original };
+}
+
 /**
  * Speech Recognition using Google Speech Engine (Chromium Web Speech API)
  */
@@ -12,7 +50,7 @@ export class NivaVoiceRecognizer {
   private currentLang: string = 'en-IN';
 
   public onStart?: () => void;
-  public onResult?: (transcript: string, isFinal: boolean) => void;
+  public onResult?: (transcript: string, isFinal: boolean, isWakeWordOnly?: boolean) => void;
   public onError?: (error: string) => void;
   public onEnd?: () => void;
 
@@ -48,12 +86,11 @@ export class NivaVoiceRecognizer {
           }
 
           if (finalTranscript.trim()) {
-            const raw = finalTranscript.trim();
-            // Automatically strip wake-words so user can say "Hey NIVA, open youtube"
-            const cleaned = raw.replace(/^(?:hey\s+niva|niva|jarvis|namaste\s+niva|suno\s+niva)[,\s:]*/i, '').trim();
-            this.onResult?.(cleaned || raw, true);
+            const norm = normalizeAcousticTranscript(finalTranscript);
+            this.onResult?.(norm.cleaned || norm.original, true, norm.isWakeWordOnly);
           } else if (interimTranscript.trim()) {
-            this.onResult?.(interimTranscript.trim(), false);
+            const norm = normalizeAcousticTranscript(interimTranscript);
+            this.onResult?.(norm.cleaned || norm.original, false, norm.isWakeWordOnly);
           }
         };
 
@@ -183,6 +220,18 @@ export class NivaVoiceSynthesizer {
     const voices = this.synth.getVoices();
     if (!voices || voices.length === 0) return;
 
+    // Check if user has an explicit saved voice URI preference
+    if (typeof window !== 'undefined') {
+      const savedURI = localStorage.getItem('niva_selected_voice_uri');
+      if (savedURI) {
+        const found = voices.find((v) => v.voiceURI === savedURI || v.name === savedURI);
+        if (found) {
+          this.selectedVoice = found;
+          return;
+        }
+      }
+    }
+
     const isMaleMode = this.currentGender === 'male';
 
     const scoredVoices = voices.map((voice) => {
@@ -190,13 +239,15 @@ export class NivaVoiceSynthesizer {
       const name = voice.name.toLowerCase();
       const lang = voice.lang.toLowerCase();
 
-      // Explicit female keywords (including Google Hindi which is female in Chrome!)
+      // Explicit female keywords (Google US English and Google Hindi in Chrome are female!)
       const isFemaleVoice =
         name.includes('female') ||
         name.includes('woman') ||
         name.includes('girl') ||
         name.includes('हिन्दी') ||
         name.includes('google hindi') ||
+        name.includes('google us english') ||
+        name.includes('google uk english female') ||
         name.includes('heera') ||
         name.includes('neerja') ||
         name.includes('swara') ||
@@ -213,6 +264,7 @@ export class NivaVoiceSynthesizer {
         name.includes('linda') ||
         name.includes('elena') ||
         name.includes('aria') ||
+        name.includes('cortana') ||
         name.includes('jenny');
 
       // Explicit male keywords
@@ -233,7 +285,9 @@ export class NivaVoiceSynthesizer {
         name.includes('eric') ||
         name.includes('brian') ||
         name.includes('andrew') ||
-        name.includes('christopher');
+        name.includes('christopher') ||
+        name.includes('uk english male') ||
+        name.includes('english male');
 
       const isIndian =
         lang.includes('en-in') ||
@@ -252,43 +306,43 @@ export class NivaVoiceSynthesizer {
       if (isMaleMode) {
         // STRICTLY REJECT ANY FEMALE VOICE IN MALE MODE
         if (isFemaleVoice) {
-          score -= 20000;
+          score -= 50000;
         } else {
           // 1. Indian male voice highest priority
           if (isIndian && (name.includes('ravi') || name.includes('madhur') || name.includes('prabhat') || isMaleVoice)) {
-            score += 5000;
+            score += 10000;
           }
-          // 2. Known male voices
+          // 2. Clear known desktop male voices (Windows & Chrome)
           if (name.includes('uk english male') || name.includes('english male')) {
-            score += 3000;
+            score += 8000;
           }
           if (name.includes('david') || name.includes('mark') || name.includes('george')) {
-            score += 2500;
+            score += 7000;
           }
           if (isMaleVoice) {
-            score += 2000;
+            score += 6000;
           }
           if (lang.startsWith('en')) {
-            score += 200;
+            score += 1000;
           }
         }
       } else {
         // STRICTLY REJECT ANY MALE VOICE IN FEMALE MODE
         if (isMaleVoice) {
-          score -= 20000;
+          score -= 50000;
         } else {
           // 1. Indian female voice highest priority
           if (isIndian || name.includes('हिन्दी') || name.includes('heera') || name.includes('neerja') || name.includes('swara')) {
-            score += 5000;
+            score += 10000;
           }
           if (name.includes('uk english female') || name.includes('zira')) {
-            score += 2500;
+            score += 7000;
           }
           if (isFemaleVoice) {
-            score += 2000;
+            score += 5000;
           }
           if (lang.startsWith('en')) {
-            score += 200;
+            score += 1000;
           }
         }
       }
@@ -316,7 +370,14 @@ export class NivaVoiceSynthesizer {
     const match = voices.find((v) => v.voiceURI === voiceURI || v.name === voiceURI);
     if (match) {
       this.selectedVoice = match;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('niva_selected_voice_uri', voiceURI);
+      }
     }
+  }
+
+  public getSelectedVoice(): SpeechSynthesisVoice | null {
+    return this.selectedVoice;
   }
 
   public getSelectedVoiceName(): string {
@@ -406,7 +467,8 @@ export class NivaVoiceSynthesizer {
     }
 
     utterance.rate = 1.0; // Natural conversational speaking pace
-    utterance.pitch = 1.0; // Authentic human pitch (no artificial robotic distortion)
+    // Masculine resonance (0.90) for male mode, natural pitch (1.05) for female mode
+    utterance.pitch = this.currentGender === 'male' ? 0.90 : 1.05;
 
     utterance.onend = () => {
       // Small natural pause between sentences

@@ -24,7 +24,12 @@ export class FallbackProvider implements AIProvider {
     return true; // Always available locally
   }
 
-  private detectToolCall(userText: string): AIToolCall | null {
+  private detectToolCall(rawUserText: string): AIToolCall | null {
+    // 0. Automatically strip acoustic wake-words ("i never", "hey niva", "aniva", etc.)
+    const userText = rawUserText
+      .replace(/^(?:i\s*never|hey\s*never|hi\s*never|in\s*ever|he\s*never|hay\s*never|high\s*never|hey\s*niva|hi\s*niva|namaste\s*niva|suno\s*niva|hey\s*neeva|hi\s*neeva|hey\s*niba|hi\s*niba|aniva|aniwa|univa|eniva|niva|neeva|niba|jarvis)[,\s:\-]*/i, '')
+      .trim() || rawUserText.trim();
+
     const text = userText.toLowerCase().trim();
 
     // 0. Direct Terminal / Shell Command Execution (Live Execution on Laptop)
@@ -53,10 +58,11 @@ export class FallbackProvider implements AIProvider {
       return { id: `call_${Date.now()}`, name: 'system_run_command', arguments: { command: userText.trim() } };
     }
 
-    // 1. YouTube & Music / Artist Playback (Checked First for Instant Action)
+    // 1. YouTube & Music / Song Search & Playback
     if (
       text.includes('youtube') ||
       text.includes('gaana') ||
+      text.includes('gana') ||
       text.includes('song') ||
       text.includes('music') ||
       text.startsWith('play ') ||
@@ -72,16 +78,96 @@ export class FallbackProvider implements AIProvider {
       text.includes('kholne ke liye bol raha') ||
       text.includes('kholne ko bol raha')
     ) {
-      const cleanQuery = userText
-        .replace(/(?:kholne ke liye bol raha hun|kholne ko bol raha hun|kholne ke liye bola|kholne ko bola|open|kholo|khol de|khol do|play|chalao|chala do|chala de|pe|search|sunao|lagao|laga do|on youtube|youtube|gaana|song|video|music|karo|baja do|bajana|please|sunwao)/gi, '')
+      // Strip filler words from natural language Hinglish command
+      let cleanQuery = userText
+        .replace(/(?:youtube\s+open\s+karo|open\s+youtube|youtube\s+kholo|kholne ke liye bol raha hun|kholne ko bol raha hun|kholne ke liye bola|kholne ko bola)[,\s]*/gi, ' ')
+        .replace(/(?:aur\s+usmein|usmein|ismein|aur\s+usko|usko|isko|aur|and|in\s+that)[,\s]*/gi, ' ')
+        .replace(/(?:gana|gaana|song|songs|video|music|track)\s+(?:search\s+karo|dhoondo|play\s+karo|chalao|lagao|bajana|baja do)/gi, ' ')
+        .replace(/(?:search\s+karo|play\s+karo|play|chalao|chala\s+do|chala\s+de|sunao|sunwao|lagao|laga\s+do|baja\s+do|bajana|karo|please|open|kholo|search|dhoondo|on\s+youtube|youtube)/gi, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
+
+      // Check if user requested "any song" or empty/generic search
+      const isGeneric = !cleanQuery || /^(?:koi\s*bhi|kuch\s*bhi|koi\s*sa\s*bhi|any\s*song|any|koi|kuch|random|gana|gaana|song|music)$/i.test(cleanQuery);
+      if (isGeneric) {
+        const isSongPlay = text.includes('gana') || text.includes('gaana') || text.includes('song') || text.includes('music') || text.includes('play') || text.includes('chalao');
+        if (isSongPlay) {
+          cleanQuery = 'Top Trending Hindi Songs';
+        }
+      }
+
       const url = cleanQuery
         ? `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanQuery)}`
         : 'https://www.youtube.com';
       return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url } };
     }
 
-    // 2. Direct Website Shortcuts & Live Services
+    // 2. WhatsApp Messaging & Client Automation
+    if (text.includes('whatsapp') || text.includes('wa web') || text.includes('what app') || text.includes('whastapp')) {
+      const isMessageIntent =
+        text.includes('message') ||
+        text.includes('msg') ||
+        text.includes('sandesh') ||
+        text.includes('bhejo') ||
+        text.includes('bhej do') ||
+        text.includes('send') ||
+        text.includes('likho') ||
+        text.includes('bol do');
+
+      if (isMessageIntent) {
+        const channel = 'whatsapp';
+        // Extract phone number (handles formats like: +91 98765 43210, +91-9876543210, 98765 43210, 9876543210)
+        const phoneMatch =
+          userText.match(/(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}\b/) ||
+          userText.match(/(?:\+?91[\s-]?)?[6-9]\d{9}\b/) ||
+          userText.match(/(?:\+?\d{1,3}[\s-]?)?\(?\d{3,5}\)?[\s-]?\d{3,5}[\s-]?\d{4,5}/) ||
+          userText.match(/\b\d{10,12}\b/);
+        let recipient = phoneMatch ? phoneMatch[0].replace(/\s+/g, '') : '';
+
+        // Named contact lookup if no phone digits given
+        const forbiddenWords = ['whatsapp', 'web', 'kholo', 'open', 'karo', 'bhejo', 'bhej', 'send', 'msg', 'message', 'likho', 'aur', 'par', 'pe', 'ko', 'do'];
+        if (!recipient) {
+          const contactMatch =
+            userText.match(/(?:par|to)\s+([A-Za-z]+)\s+ko/i) ||
+            userText.match(/(?:to\s+)?([A-Za-z]+)\s+ko\s+(?:message|msg)/i);
+          if (contactMatch && contactMatch[1] && !forbiddenWords.includes(contactMatch[1].toLowerCase())) {
+            recipient = contactMatch[1];
+          }
+        }
+
+        if (!recipient) {
+          recipient = '+91 98765 43210';
+        }
+
+        // Extract Message Body
+        let message = '';
+        const msgMatch = userText.match(/(?:message|msg|bhejo|likho|saying|text|ki)\s*[:"']?\s*(.+)$/i);
+        if (msgMatch && msgMatch[1]) {
+          message = msgMatch[1]
+            .replace(/(?:bhejo|bhej do|karo|send karo|please|whatsapp par|whatsapp pe)/gi, '')
+            .trim();
+        }
+
+        if (!message || message.length < 2) {
+          message = 'Namaste! Yeh NIVA AI Assistant ki taraf se test message hai.';
+        }
+
+        return {
+          id: `call_${Date.now()}`,
+          name: 'send_message',
+          arguments: {
+            channel,
+            recipient,
+            message
+          }
+        };
+      }
+
+      // If user only asked to open WhatsApp
+      return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'whatsapp' } };
+    }
+
+    // 3. Direct Website Shortcuts & Live Services
     if (text.includes('github')) {
       return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://github.com' } };
     }
@@ -90,9 +176,6 @@ export class FallbackProvider implements AIProvider {
     }
     if ((text.includes('gmail') || text.includes('mail')) && !text.includes('send') && !text.includes('bhejo')) {
       return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://mail.google.com' } };
-    }
-    if ((text.includes('whatsapp') || text.includes('wa web')) && (text.includes('kholo') || text.includes('open') || text.includes('web'))) {
-      return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://web.whatsapp.com' } };
     }
     if (text.includes('twitter') || text.includes('x.com')) {
       return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://x.com' } };
@@ -605,15 +688,15 @@ export class FallbackProvider implements AIProvider {
       };
     }
 
-    // 23. Send WhatsApp / Telegram Message
-    if (text.includes('whatsapp') || text.includes('telegram') || text.includes('send message') || text.includes('message bhejo') || text.includes('sandesh bhejo')) {
-      const channel = text.includes('telegram') ? 'telegram' : 'whatsapp';
+    // 23. Send Telegram / SMS / Multi-channel Message
+    if (text.includes('telegram') || text.includes('sms') || text.includes('send message') || text.includes('message bhejo') || text.includes('sandesh bhejo')) {
+      const channel = text.includes('telegram') ? 'telegram' : text.includes('sms') ? 'sms' : 'whatsapp';
       return {
         id: `call_${Date.now()}`,
         name: 'send_message',
         arguments: {
           channel,
-          recipient: channel === 'whatsapp' ? '+91 98765 43210' : '@harshit_sharma',
+          recipient: channel === 'telegram' ? '@harshit_sharma' : '+91 98765 43210',
           message: userText
         }
       };

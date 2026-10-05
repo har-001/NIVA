@@ -301,8 +301,9 @@ export const systemTools: ToolDefinition[] = [
 
       try {
         if (process.platform === 'win32') {
-          // Use cmd.exe /c start "" which triggers Windows ShellExecute directly to open default browser and bring to front
-          await execAsync(`cmd.exe /c start "" "${url.replace(/"/g, '""')}"`);
+          // Use PowerShell Start-Process which invokes Win32 ShellExecute directly and handles URLs with ampersands (&) and search queries seamlessly
+          const safeUrl = url.replace(/'/g, "''");
+          await execAsync(`powershell -NoProfile -WindowStyle Hidden -Command "Start-Process '${safeUrl}'"`);
         } else {
           await execAsync(`xdg-open "${url}"`);
         }
