@@ -125,26 +125,39 @@ export class FallbackProvider implements AIProvider {
         let recipient = phoneMatch ? phoneMatch[0].replace(/\s+/g, '') : '';
 
         // Named contact lookup if no phone digits given
-        const forbiddenWords = ['whatsapp', 'web', 'kholo', 'open', 'karo', 'bhejo', 'bhej', 'send', 'msg', 'message', 'likho', 'aur', 'par', 'pe', 'ko', 'do'];
+        const forbiddenWords = ['whatsapp', 'web', 'kholo', 'open', 'karo', 'bhejo', 'bhej', 'send', 'msg', 'message', 'likho', 'aur', 'par', 'pe', 'ko', 'do', 'liye', 'text', 'sandesh'];
         if (!recipient) {
           const contactMatch =
-            userText.match(/(?:par|to)\s+([A-Za-z]+)\s+ko/i) ||
-            userText.match(/(?:to\s+)?([A-Za-z]+)\s+ko\s+(?:message|msg)/i);
+            userText.match(/(?:par|to|pe|ke\s+liye)\s+([A-Za-z\u0900-\u097F]+)\s+ko/i) ||
+            userText.match(/([A-Za-z\u0900-\u097F]+)\s+ko\s+(?:message|msg|bolo|bol|bhejo|whatsapp|sandesh|likho)/i) ||
+            userText.match(/(?:to\s+)?([A-Za-z\u0900-\u097F]+)\s+ko/i);
           if (contactMatch && contactMatch[1] && !forbiddenWords.includes(contactMatch[1].toLowerCase())) {
             recipient = contactMatch[1];
           }
         }
 
         if (!recipient) {
-          recipient = '+91 98765 43210';
+          recipient = 'Nishant';
         }
 
         // Extract Message Body
         let message = '';
-        const msgMatch = userText.match(/(?:message|msg|bhejo|likho|saying|text|ki)\s*[:"']?\s*(.+)$/i);
+        const msgMatch =
+          userText.match(/(?:bol(?:o|na| do)?|keh(?:o|na| do)?)\s*[:"']?\s*(.+)$/i) ||
+          userText.match(/(?:msg|message|sandesh|text)\s*(?:kr do|kar do|karo|bhejo|likho|send karo|send kar do)?\s*(?:ki|bol|bolo|kehna)?\s*[:"']?\s*(.+)$/i) ||
+          userText.match(/(?:bhejo|bhej do|send karo|likho|type karo)\s*[:"']?\s*(.+)$/i) ||
+          userText.match(/(?:message|msg|saying|ki)\s*[:"']?\s*(.+)$/i);
+
         if (msgMatch && msgMatch[1]) {
-          message = msgMatch[1]
-            .replace(/(?:bhejo|bhej do|karo|send karo|please|whatsapp par|whatsapp pe)/gi, '')
+          message = msgMatch[1];
+        }
+
+        if (message) {
+          // Strip conversational verbs: "bol", "bolo", "bol do", "keh do", "ki", etc.
+          message = message
+            .replace(/^(?:bol(?:o|na| do)?|keh(?:o|na| do)?|likh(?:o|na| do)?|bat(?:ao|ana|a do)?|ki|that|ye|yeh)\s+/i, '')
+            .replace(/(?:\s+(?:bhejo|bhej do|send karo|send kar do|karo|kar do|please|plz|whatsapp par|whatsapp pe))+$/i, '')
+            .replace(/^["'“”]|["'“”]$/g, '')
             .trim();
         }
 
@@ -978,6 +991,31 @@ export class FallbackProvider implements AIProvider {
       text.includes('chala de');
 
     if (hasOpenAction) {
+      // Office & Productivity
+      if (text.includes('word') || text.includes('winword') || text.includes('doc')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'winword' } };
+      }
+      if (text.includes('excel') || text.includes('sheet')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'excel' } };
+      }
+      if (text.includes('powerpoint') || text.includes('ppt') || text.includes('presentation')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'powerpnt' } };
+      }
+      if (text.includes('paint') || text.includes('drawing')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'mspaint' } };
+      }
+      if (text.includes('task manager') || text.includes('taskmgr') || text.includes('processes')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'taskmgr' } };
+      }
+      if (text.includes('setting') || text.includes('control panel')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'settings' } };
+      }
+      if (text.includes('explorer') || text.includes('my computer') || text.includes('this pc') || text.includes('files') || text.includes('folder')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'explorer' } };
+      }
+      if (text.includes('vlc') || text.includes('media player')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'vlc' } };
+      }
       if (text.includes('calendar') || text.includes('calender') || text.includes('cal')) {
         return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'calendar' } };
       }
@@ -996,6 +1034,12 @@ export class FallbackProvider implements AIProvider {
       if (text.includes('edge')) {
         return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'edge' } };
       }
+      if (text.includes('brave')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'brave' } };
+      }
+      if (text.includes('firefox')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'firefox' } };
+      }
       if (text.includes('spotify') || text.includes('music') || text.includes('gaana')) {
         return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'spotify' } };
       }
@@ -1011,6 +1055,30 @@ export class FallbackProvider implements AIProvider {
       if (text.includes('terminal') || text.includes('cmd') || text.includes('powershell')) {
         return { id: `call_${Date.now()}`, name: 'system_open_app', arguments: { app_name: 'terminal' } };
       }
+
+      // Universal Website shortcuts
+      if (text.includes('amazon')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.amazon.in' } };
+      }
+      if (text.includes('flipkart')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.flipkart.com' } };
+      }
+      if (text.includes('netflix')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.netflix.com' } };
+      }
+      if (text.includes('hotstar')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.hotstar.com' } };
+      }
+      if (text.includes('reddit')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.reddit.com' } };
+      }
+      if (text.includes('linkedin')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.linkedin.com' } };
+      }
+      if (text.includes('wikipedia')) {
+        return { id: `call_${Date.now()}`, name: 'system_open_url', arguments: { url: 'https://www.wikipedia.org' } };
+      }
+
       // General app extraction fallback
       const cleanTarget = text
         .replace(/(?:open|kholo|khol de|khol do|kholna|launch|start|chalao|chala de|chala do|app|application|please|bhi|ko|pe|mera|meri)/gi, '')

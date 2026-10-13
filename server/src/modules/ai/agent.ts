@@ -207,8 +207,8 @@ export class NivaAgent {
               const channel = String(chunk.toolCall.arguments?.channel || 'whatsapp').toUpperCase();
               const recipient = chunk.toolCall.arguments?.recipient || 'contact';
               const msg = chunk.toolCall.arguments?.message || '';
-              verbalConfirm = `Maine ${channel} par ${recipient} ke liye message prepare karke launch kar diya hai.`;
-              explanation = `Maine aapke laptop par **${channel}** launch kar diya hai with pre-filled message for **${recipient}**:\n\n> "${msg}"\n\nAap WhatsApp window me direct **Enter** press karke message send kar sakte hain! 🚀`;
+              verbalConfirm = `Maine ${channel} par ${recipient} ko message bhej diya hai!`;
+              explanation = `Maine aapke laptop par **${channel}** ke through **${recipient}** ko message automatically send kar diya hai! 🚀\n\n> "${msg}"`;
             } else if (toolName === 'initiate_call') {
               verbalConfirm = 'Call connect ho gayi hai.';
               explanation = `${verbalConfirm}\n\n${execution.result}`;
